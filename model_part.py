@@ -52,7 +52,7 @@ def fc(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trainable=Tr
         )
         biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
         fc = tf.nn.relu_layer(inputs, weights, biases, name=scope.name)
-        return fc
+        return fc, weights, biases
 
 
 def fc_softmax(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trainable=True):
@@ -69,4 +69,4 @@ def fc_softmax(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trai
         )
         biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
         softmax_linear = tf.add(tf.matmul(flat, weights), biases, name=scope.name)
-        return softmax_linear
+        return softmax_linear, weights, biases
