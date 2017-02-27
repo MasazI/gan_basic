@@ -16,5 +16,5 @@ class Optimizer():
             0.95,  # Decay rate.
             staircase=True)
         # optimizer=tf.train.GradientDescentOptimizer(learning_rate).minimize(loss,global_step=batch,var_list=var_list)
-        optimizer = tf.train.MomentumOptimizer(learning_rate, 0.6).minimize(loss, global_step=batch, var_list=var_list)
+        optimizer = tf.train.AdamOptimizer(learning_rate, 0.6).minimize(loss, global_step=batch, var_list=var_list)
         return optimizer

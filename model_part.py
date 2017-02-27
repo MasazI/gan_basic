@@ -46,6 +46,22 @@ def fc(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trainable=Tr
         weights = _variable_with_weight_decay(
             'weights',
             shape,
+            stddev=0.1,
+            wd=wd,
+            trainable=trainable
+        )
+        biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.0))
+        fc = tf.nn.tanh(tf.add(tf.matmul(inputs, weights), biases, name=scope.name))
+        return fc, weights, biases
+
+
+def fc_relu(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trainable=True):
+    with tf.variable_scope(scope_name) as scope:
+        if reuse is True:
+            scope.reuse_variables()
+        weights = _variable_with_weight_decay(
+            'weights',
+            shape,
             stddev=0.01,
             wd=wd,
             trainable=trainable

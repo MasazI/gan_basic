@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 # define fixed parameter
-TRAIN_ITERS = 10000
+TRAIN_ITERS = 1000
 
 # define arguments
 flags = tf.app.flags
@@ -32,6 +32,7 @@ def pre_train(verbose=False):
         train_labels = tf.placeholder(tf.float32, shape=(FLAGS.mini_batch, 1))
 
         discrim = model.Discriminator(FLAGS.num_units, FLAGS.output_units)
+
 
         D, theta = discrim.mlp(input_node)
         loss = tf.reduce_mean(tf.square(D - train_labels))
@@ -73,8 +74,8 @@ def pre_train(verbose=False):
             plt.title('initial Decision Boundary')
             plt.show()
 
-        lh = np.zeros(1000)
-        for i in range(1000):
+        lh = np.zeros(100)
+        for i in range(100):
             # d=np.random.normal(mu,sigma,M)
             d = (np.random.random(
                 FLAGS.mini_batch) - 0.5) * 10.0  # instead of sampling only from gaussian, want the domain to be covered as uniformly as possible
@@ -193,8 +194,6 @@ def pre_train(verbose=False):
     plt.show()
     plot_fig()
     plt.show()
-
-
 
 
 def main(_):
