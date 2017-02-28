@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 # define fixed parameter
-TRAIN_ITERS = 1000
+TRAIN_ITERS = 30000
 
 # define arguments
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 flags.DEFINE_string('mode', 'train', 'Mode.')
 flags.DEFINE_integer('num_layers', 1, 'Number of hidden layers.')
-flags.DEFINE_integer('num_units', 5, 'Number of units per hidden layer.')
+flags.DEFINE_integer('num_units', 6, 'Number of units per hidden layer.')
 flags.DEFINE_integer('output_units', 1, 'Number of units per output layer.')
 flags.DEFINE_integer('mini_batch', 200, 'Number of mini-batch size.')
 flags.DEFINE_float('keep_prob', 0.75, 'Keep probability for dropout.')
@@ -74,8 +74,8 @@ def pre_train(verbose=False):
             plt.title('initial Decision Boundary')
             plt.show()
 
-        lh = np.zeros(100)
-        for i in range(100):
+        lh = np.zeros(1000)
+        for i in range(1000):
             # d=np.random.normal(mu,sigma,M)
             d = (np.random.random(
                 FLAGS.mini_batch) - 0.5) * 10.0  # instead of sampling only from gaussian, want the domain to be covered as uniformly as possible
@@ -103,7 +103,7 @@ def pre_train(verbose=False):
     with tf.variable_scope("G"):
         z_node=tf.placeholder(tf.float32, shape=(FLAGS.mini_batch, 1)) # M uniform01 floats
         gen = model.Generator(FLAGS.num_units, FLAGS.output_units)
-        G,theta_g = gen.mlp(z_node) # generate normal transformation of Z
+        G, theta_g = gen.mlp(z_node) # generate normal transformation of Z
         G = tf.multiply(5.0, G)
 
     with tf.variable_scope("D") as scope:
@@ -115,8 +115,7 @@ def pre_train(verbose=False):
 
         D1 = tf.maximum(tf.minimum(fc, .99), 0.01) # clamp as a probability
         # make a copy of D that uses the same variables, but takes in G as input
-        scope.reuse_variables()
-        fc, theta_d = discrim.mlp(G)
+        fc, theta_d = discrim.mlp(G, reuse=True)
         D2 = tf.maximum(tf.minimum(fc, .99), 0.01)
 
     obj_d=tf.reduce_mean(tf.log(D1)+tf.log(1-D2))
@@ -181,8 +180,15 @@ def pre_train(verbose=False):
             x.sort()
             z = np.linspace(-5.0, 5.0, FLAGS.mini_batch) + np.random.random(FLAGS.mini_batch) * 0.01  # sample m-batch from noise prior
             # train discriminator
-            histd[i], _ = sess.run([obj_d, opt_d], {x_node: np.reshape(x, (FLAGS.mini_batch, 1)), z_node: np.reshape(z, (FLAGS.mini_batch, 1))})
+            histd[i], _ = sess.run(
+                [obj_d, opt_d],
+                feed_dict={
+                    x_node: np.reshape(x, (FLAGS.mini_batch, 1)),
+                    z_node: np.reshape(z, (FLAGS.mini_batch, 1))})
+
+        # sampling z
         z = np.linspace(-5.0, 5.0, FLAGS.mini_batch) + np.random.random(FLAGS.mini_batch) * 0.01  # sample noise prior
+
         # train generator
         histg[i], _ = sess.run([obj_g, opt_g], {z_node: np.reshape(z, (FLAGS.mini_batch, 1))})  # update generator
         if i % (TRAIN_ITERS // 10) == 0:
