@@ -109,21 +109,24 @@ def pre_train(verbose=False):
     with tf.variable_scope("D") as scope:
         # D(x)
         x_node=tf.placeholder(tf.float32, shape=(FLAGS.mini_batch,1)) # input M normally distributed floats
-
         discrim = model.Discriminator(FLAGS.num_units, FLAGS.output_units)
-        fc, theta_d = discrim.mlp(x_node) # output likelihood of being normally distributed
 
+        # takes x_node as input
+        fc, theta_d = discrim.mlp(x_node) # output likelihood of being normally distributed
         D1 = tf.maximum(tf.minimum(fc, .99), 0.01) # clamp as a probability
-        # make a copy of D that uses the same variables, but takes in G as input
+        #D1 = fc
+
+        # takes in G as input
         fc, theta_d = discrim.mlp(G, reuse=True)
-        D2 = tf.maximum(tf.minimum(fc, .99), 0.01)
+        D2 = tf.maximum(tf.minimum(fc, .99), 0.01) # clamp as a probability
+        #D2 = fc
 
     obj_d=tf.reduce_mean(tf.log(D1)+tf.log(1-D2))
     obj_g=tf.reduce_mean(tf.log(D2))
 
     Opt = train_op.Optimizer(TRAIN_ITERS)
 
-    opt_d = Opt.momentum_optimizer(1 - obj_d, theta_d)
+    opt_d = Opt.momentum_optimizer(0.9 - obj_d, theta_d)
     opt_g = Opt.momentum_optimizer(1 - obj_g, theta_g)
 
     sess = tf.Session(config=tf.ConfigProto(
