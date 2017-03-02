@@ -22,9 +22,11 @@ def _variable_on_gpu(name, shape, initializer):
     return var
 
 
-def linear_project(scope_name, inputs, output_size, stddev=0.02, bias_start=0.0, with_w=False):
+def linear_project(scope_name, inputs, output_size, stddev=0.02, bias_start=0.0, reuse=False, with_w=False):
     shape = inputs.get_shape().as_list()
-    with tf.variable_scope(scope_name or "Linear"):
+    with tf.variable_scope(scope_name or "Linear") as scope:
+        if reuse is True:
+            scope.reuse_variables()
         matrix = tf.get_variable("weights", [shape[1], output_size], tf.float32, tf.random_normal_initializer(stddev=stddev))
         bias = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
     if with_w:
@@ -85,7 +87,7 @@ def conv2d_transpose(scope_name, inputs, shape, output_shape, bias_shape, stride
             wd=0.0,  # not use weight decay
             trainable=trainable
         )
-        tf_output_shape = tf.pack(output_shape)
+        tf_output_shape = tf.stack(output_shape)
         deconv = tf.nn.conv2d_transpose(inputs, kernel, tf_output_shape, stride, padding=padding)
         deconv.set_shape(output_shape)
         biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
@@ -107,7 +109,7 @@ def conv2d_transpose_bn(scope_name, inputs, shape, output_shape, bias_shape, str
             wd=0.0,  # not use weight decay
             trainable=trainable
         )
-        tf_output_shape = tf.pack(output_shape)
+        tf_output_shape = tf.stack(output_shape)
         deconv = tf.nn.conv2d_transpose(inputs, kernel, tf_output_shape, stride, padding=padding)
         deconv.set_shape(output_shape)
         bn = batch_norm(deconv)
@@ -119,6 +121,7 @@ def conv2d_transpose_bn(scope_name, inputs, shape, output_shape, bias_shape, str
 
 
 def batch_norm(inputs,
+                       scope_name,
                        decay=0.999,
                        center=True,
                        scale=False,
@@ -152,7 +155,7 @@ def batch_norm(inputs,
       a tensor representing the output of the operation.
     """
     inputs_shape = inputs.get_shape()
-    with tf.variable_scope('BatchNorm', [inputs], scope, reuse=reuse):
+    with tf.variable_scope(scope_name, [inputs], scope, reuse=reuse):
         axis = list(range(len(inputs_shape) - 1))
         params_shape = inputs_shape[-1:]
         # Allocate parameters for the beta and gamma of the normalization.
@@ -248,3 +251,10 @@ def fc_softmax(scope_name, inputs, shape, bias_shape, wd=0.04, reuse=False, trai
         biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
         softmax_linear = tf.add(tf.matmul(flat, weights), biases, name=scope.name)
         return softmax_linear, weights, biases
+
+
+def lrelu(x, leak=0.2, name="lrelu"):
+    with tf.variable_scope(name):
+        f1 = 0.5 * (1 + leak)
+        f2 = 0.5 * (1 - leak)
+    return f1 * x + f2 * abs(x)
