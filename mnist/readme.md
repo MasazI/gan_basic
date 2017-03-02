@@ -1,5 +1,5 @@
 # mnist
-small DSGANs for mnist.
+small DCGANs for mnist.
 ```
 python task.py
 ```
