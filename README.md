@@ -8,6 +8,8 @@ gan_basic is a python implementation of several generative adversarial network.
 - 1dim_gaussian is GANs for one dimentional gaussian.
 - mnist is small DCGANs for mnist.
 - face is DCGANs for face images.
+- cifar10 is DCGANs for cifar10
+- Wassertstein GAN
 
 ---
 Copyright (c) 2017 Masahiro Imai
