@@ -29,9 +29,9 @@ class Generator:
 
         # deconv2 conv2d_transpose arguments = (scope_name, inputs, shape, output_shape, bias_shape, stride, padding='VALID', reuse=False, trainable=True)
         deconv_h2, deconv_h2_w, deconv_h2_b = mp.conv2d_transpose('g_deconv_h2', h1,
-                                                                  [5, 5, 1, h1.get_shape()[-1]],
-                                                                  [self.batch_size, 28, 28, 1],
-                                                                  [1], [1, 2, 2, 1],
+                                                                  [5, 5, 3, h1.get_shape()[-1]],
+                                                                  [self.batch_size, 28, 28, 3],
+                                                                  [3], [1, 2, 2, 1],
                                                                   padding='SAME', reuse=reuse, with_w=True)
         print(deconv_h2.get_shape())
         return tf.nn.tanh(deconv_h2)
@@ -43,6 +43,7 @@ class Descriminator:
         self.first_conv_dim = first_conv_dim
 
     def inference(self, x, reuse=False):
+        print("===")
         print(x.get_shape())
         # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
         conv_h0, conv_h0_w, conv_h0_b = mp.conv2d('d_conv_h0', x,
@@ -51,7 +52,7 @@ class Descriminator:
                                                   [1, 2, 2, 1],
                                                   padding='SAME', reuse=reuse, with_w=True)
         h0 = mp.lrelu(conv_h0)
-
+        print(h0.get_shape())
         # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
         conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', h0,
                                                   [5, 5, h0.get_shape()[-1], self.first_conv_dim],
