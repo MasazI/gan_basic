@@ -1,7 +1,7 @@
 # gan_basic
 gan_basic is a python implementation of several generative adversarial network.
 
-## Requirmentes
+## Requirements
 - Tensorflow 1.0+
 
 ## Features
