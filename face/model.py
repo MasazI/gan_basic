@@ -76,7 +76,8 @@ class Descriminator:
                                                   [self.first_conv_dim],
                                                   [1, 2, 2, 1],
                                                   padding='SAME', reuse=reuse, with_w=True)
-        h1 = mp.lrelu(conv_h1)
+        #h1 = mp.lrelu(conv_h1)
+        h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse))
 
         # 3rd
         conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', h1,
@@ -84,7 +85,8 @@ class Descriminator:
                                                   [self.first_conv_dim],
                                                   [1, 2, 2, 1],
                                                   padding='SAME', reuse=reuse, with_w=True)
-        h2 = mp.lrelu(conv_h2)
+        #h2 = mp.lrelu(conv_h2)
+        h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse))
         print(h2.get_shape())
         # 4th
         conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', h2,
@@ -92,7 +94,8 @@ class Descriminator:
                                                   [self.first_conv_dim],
                                                   [1, 2, 2, 1],
                                                   padding='SAME', reuse=reuse, with_w=True)
-        h3 = mp.lrelu(conv_h3)
+        #h3 = mp.lrelu(conv_h3)
+        h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse))
         print("h3")
         print(h3.get_shape())
 
