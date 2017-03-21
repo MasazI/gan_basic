@@ -10,15 +10,15 @@ UPDATE_OPS_COLLECTION = '_update_ops_'
 
 
 def _variable_with_weight_decay(name, shape, stddev, wd, trainable=True):
-    var = _variable_on_gpu(name, shape, tf.truncated_normal_initializer(stddev=stddev))
+    var = _variable_on_gpu(name, shape, tf.truncated_normal_initializer(stddev=stddev), trainable=trainable)
     if wd:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
     return var
 
 
-def _variable_on_gpu(name, shape, initializer):
-    var = tf.get_variable(name, shape, initializer=initializer)
+def _variable_on_gpu(name, shape, initializer, trainable=True):
+    var = tf.get_variable(name, shape, initializer=initializer, trainable=trainable)
     return var
 
 
@@ -42,12 +42,14 @@ def conv2d(scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.
         kernel = _variable_with_weight_decay(
             'weights',
             shape=shape,
-            stddev=0.01,
+            stddev=0.02,
             wd=wd,
             trainable=trainable
         )
         conv = tf.nn.conv2d(inputs, kernel, stride, padding=padding)
-        biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
+        biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.0), trainable=trainable)
+        conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
+
         # bias = tf.nn.bias_add(conv, biases)
         # conv_ = tf.nn.relu(bias, name=scope.name)
     if with_w:
@@ -83,14 +85,15 @@ def conv2d_transpose(scope_name, inputs, shape, output_shape, bias_shape, stride
         kernel = _variable_with_weight_decay(
             'weights',
             shape=shape,
-            stddev=0.01,
+            stddev=0.02,
             wd=0.0,  # not use weight decay
             trainable=trainable
         )
         tf_output_shape = tf.stack(output_shape)
         deconv = tf.nn.conv2d_transpose(inputs, kernel, tf_output_shape, stride, padding=padding)
         deconv.set_shape(output_shape)
-        biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.1))
+        biases = _variable_on_gpu('biases', bias_shape, tf.constant_initializer(0.0), trainable=trainable)
+        deconv = tf.reshape(tf.nn.bias_add(deconv, biases), deconv.get_shape())
         #deconv_ = tf.nn.relu(bn, name=scope.name)
         if with_w:
             return deconv, kernel, biases
@@ -118,6 +121,23 @@ def conv2d_transpose_bn(scope_name, inputs, shape, output_shape, bias_shape, str
             return bn, kernel
         else:
             return bn
+
+
+class BatchNorm(object):
+    def __init__(self, epsilon=1e-5, momentum = 0.9, name="batch_norm"):
+        with tf.variable_scope(name):
+            self.epsilon = epsilon
+            self.momentum = momentum
+            self.name = name
+
+    def __call__(self, x, trainable=True):
+        return tf.contrib.layers.batch_norm(x,
+                                            decay=self.momentum,
+                                            updates_collections=None,
+                                            epsilon=self.epsilon,
+                                            scale=True,
+                                            is_training=trainable,
+                                            scope=self.name)
 
 
 def batch_norm(inputs,
