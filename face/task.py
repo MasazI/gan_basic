@@ -24,15 +24,15 @@ flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
 flags.DEFINE_integer("sample_size", 64, "The size of sample images [64]")
 flags.DEFINE_integer("image_height", 64, "The size of image to use (will be center cropped) [64]")
 flags.DEFINE_integer("image_width", 64, "The size of image to use (will be center cropped) [64]")
-flags.DEFINE_integer("image_height_org", 178, "original image height")
-flags.DEFINE_integer("image_width_org", 218, "original image width")
+flags.DEFINE_integer("image_height_org", 108, "original image height")
+flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("image_depth_org", 3, "original image depth")
 flags.DEFINE_integer("num_threads", 4, "number of threads using queue")
 
 flags.DEFINE_integer("y_dim", None, "dimension of dim for y")
 flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
-flags.DEFINE_integer("gc_dim", 128, "dimension of generative filters in conv layer")
-flags.DEFINE_integer("dc_dim", 128, "dimension of discriminative filters in conv layer")
+flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
+flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
 flags.DEFINE_string("model_name", "face", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
@@ -50,29 +50,29 @@ class DCGAN():
         z_sum = tf.summary.histogram("z", z)
 
         self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
-        G = self.generator.inference(z)
+        self.G = self.generator.inference(z)
 
         # descriminator inference using true images
-        discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
-        self.D1, D1_logits = discriminator.inference(images)
+        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
+        self.D1, D1_logits = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G
-        samples = self.generator.inference(z, reuse=True)
-        self.D2, D2_logits = discriminator.inference(samples, reuse=True)
+        self.samples = self.generator.sampler(z, reuse=True)
+        self.D2, D2_logits = self.discriminator.inference(self.G, reuse=True)
 
         d1_sum = tf.summary.histogram("d1", self.D1)
-        d2_sum = tf.summary.histogram("d2", self.D1)
-        G_sum = tf.summary.histogram("G", G)
+        d2_sum = tf.summary.histogram("d2", self.D2)
+        G_sum = tf.summary.histogram("G", self.G)
 
         return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
 
-    def cost(self, logits, logits_):
+    def cost(self, D1_logits, D2_logits):
         # real image loss (1) for descriminator
-        d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=tf.ones_like(self.D1)))
+        d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_logits, labels=tf.ones_like(self.D1)))
         # fake image loss (0) for descriminator
-        d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_, labels=tf.zeros_like(self.D2)))
+        d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits, labels=tf.zeros_like(self.D2)))
         # fake image loss (1) for generator
-        g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_, labels=tf.ones_like(self.D2)))
+        g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits, labels=tf.ones_like(self.D2)))
 
         # summary
         d_loss_real_sum = tf.summary.scalar("d_loss_real", d_loss_real)
@@ -83,7 +83,7 @@ class DCGAN():
         return d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss
 
     def generate_images(self, z, row=8, col=8):
-        images = tf.cast(tf.multiply(tf.add(self.generator.inference(z, reuse=True), 1.0), 127.5), tf.uint8)
+        images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
         print(images.get_shape())
         images = [image for image in tf.split(images, FLAGS.batch_size, axis=0)]
         rows = []
@@ -95,15 +95,15 @@ class DCGAN():
 
 def train():
     # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
-    d = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+    datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
                         FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
-    images = d.get_inputs(FLAGS.image_height, FLAGS.image_width)
+    images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
     images_inf, logits1, logits2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    d_loss_fake, d_loss_real, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss = dcgan.cost(
+    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss = dcgan.cost(
         logits1, logits2)
 
     # trainable variables
@@ -114,12 +114,11 @@ def train():
     d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
     g_optim = G_train_op(g_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
 
-    # sampling from z
-    generate_images = dcgan.generate_images(z, 4, 4)
+    # saver
+    saver = tf.train.Saver()
 
-    # summary
-    g_sum = tf.summary.merge([z_sum, d2_sum, G_sum, d_loss_fake_sum, g_loss_sum])
-    d_sum = tf.summary.merge([z_sum, d1_sum, d_loss_real_sum, d_loss_sum])
+    # sampling from z
+    generate_images = dcgan.generate_images(z, 8, 8)
 
     # initialization
     init_op = tf.global_variables_initializer()
@@ -129,10 +128,12 @@ def train():
         gpu_options=gpu_options))
     writer = tf.summary.FileWriter("./logs", sess.graph_def)
 
-    # saver
-    saver = tf.train.Saver(tf.global_variables())
     # run
     sess.run(init_op)
+
+    # summary
+    g_sum = tf.summary.merge([z_sum, d2_sum, G_sum, d_loss_fake_sum, g_loss_sum])
+    d_sum = tf.summary.merge([z_sum, d1_sum, d_loss_real_sum, d_loss_sum])
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -141,20 +142,26 @@ def train():
     start_time = time.time()
 
     for epoch in xrange(FLAGS.epochs):
-        for idx in xrange(0, int(d.batch_idxs)):
+        for idx in xrange(0, int(datas.batch_idxs)):
             batch_z = np.random.uniform(-1, 1, [FLAGS.batch_size, FLAGS.z_dim]).astype(np.float32)
 
+            # D optimization
             images_inf_eval, _, summary_str = sess.run([images_inf, d_optim, d_sum], {z: batch_z})
             writer.add_summary(summary_str, counter)
 
+            # twice G optimization
+            _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
+            writer.add_summary(summary_str, counter)
+            _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
+            writer.add_summary(summary_str, counter)
             _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
             writer.add_summary(summary_str, counter)
 
             errD_fake = sess.run(d_loss_fake, {z: batch_z})
-            errD_real = sess.run(d_loss_real, {z: batch_z})
+            errD_real = sess.run(d_loss_real)
             errG = sess.run(g_loss, {z: batch_z})
-            print("epochs: %02d %04d/%04d time: %4.4f, d_loss: %.8f, g_loss: %.8f" % (
-                epoch, idx, FLAGS.steps, time.time() - start_time, errD_fake + errD_real, errG))
+            print("epochs: %02d %04d/%04d time: %4.4f, d_loss: %.8f (F:%.8f, R:%.8f), g_loss: %.8f" % (
+                epoch, idx, FLAGS.steps, time.time() - start_time, errD_fake + errD_real, errD_fake, errD_real, errG))
 
             if np.mod(counter, 100) == 1:
                 print("generate samples.")
