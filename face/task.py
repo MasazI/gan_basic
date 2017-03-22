@@ -15,13 +15,6 @@ from tensorflow.python.platform import gfile
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-######## org
-
-import model_org as mo
-import utils
-
-#######3
-
 flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
@@ -100,175 +93,6 @@ class DCGAN():
         return tf.image.encode_png(tf.squeeze(image, [0]))
 
 
-def train_org():
-    # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
-    datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                        FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
-    images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
-
-    #z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
-
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=FLAGS.gpu_memory_fraction)
-    sess = tf.Session(config=tf.ConfigProto(
-        allow_soft_placement=True,
-        gpu_options=gpu_options))
-    writer = tf.summary.FileWriter("./logs", sess.graph_def)
-
-    with tf.Session() as sess1:
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=sess1, coord=coord)
-        dcgan = mo.DCGAN(
-            sess1,
-            input_width=FLAGS.image_width,
-            input_height=FLAGS.image_height,
-            output_width=FLAGS.image_width,
-            output_height=FLAGS.image_height,
-            batch_size=FLAGS.batch_size,
-            c_dim=FLAGS.image_depth_org,
-            #dataset_name=FLAGS.dataset,
-            #input_fname_pattern=FLAGS.input_fname_pattern,
-            #is_crop=FLAGS.is_crop,
-            #checkpoint_dir=FLAGS.checkpoint_dir,
-            #sample_dir=FLAGS.sample_dir,
-            )
-
-        # open-source
-        z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
-        # images_inf, logits1, logits2, G_sum, z_sum, d1_sum, d2_sum, d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, sampler = dcgan.build_model(images, z)
-        dcgan.build_model(images, z)
-
-        dcgan.train()
-
-        coord.request_stop()
-        coord.join(threads)
-        # sess.close()
-
-    # original implementation
-    dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    images_inf, logits1, logits2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss = dcgan.cost(
-        logits1, logits2)
-
-    # trainable variables
-    t_vars = tf.trainable_variables()
-    d_vars = [var for var in t_vars if 'd_' in var.name]
-    g_vars = [var for var in t_vars if 'g_' in var.name]
-    # train operations
-    #d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
-    #g_optim = G_train_op(g_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
-
-
-    d_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
-              .minimize(d_loss, var_list=d_vars)
-    g_optim = tf.train.AdamOptimizer(FLAGS.learning_rate, beta1=FLAGS.beta1) \
-              .minimize(g_loss, var_list=g_vars)
-
-
-    # sampling from z
-    # sampling z
-    #generate_images = dcgan.sampling
-    generate_images = dcgan.generate_images(z, 4, 4)
-
-    # summary
-    g_sum = tf.summary.merge([z_sum, d2_sum, G_sum, d_loss_fake_sum, g_loss_sum])
-    #d_sum = tf.summary.merge([z_sum, d1_sum, d_loss_real_sum, d_loss_sum])
-
-    # initialization
-    init_op = tf.global_variables_initializer()
-
-    # run
-    sess.run(init_op)
-
-    # saver
-    saver = tf.train.Saver()
-
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
-    counter = 1
-    start_time = time.time()
-
-    sample_z = np.random.uniform(-1, 1, size=(FLAGS.batch_size, FLAGS.z_dim))
-
-    for epoch in xrange(FLAGS.epochs):
-        for idx in xrange(0, int(datas.batch_idxs)):
-            batch_z = np.random.uniform(-1, 1, [FLAGS.batch_size, FLAGS.z_dim]) \
-                .astype(np.float32)
-
-            # Update D network
-            _, summary_str = sess.run([d_optim, d1_sum],
-                                           feed_dict={z: batch_z})
-            writer.add_summary(summary_str, counter)
-
-            # Update G network
-            _, summary_str = sess.run([g_optim, g_sum],
-                                           feed_dict={z: batch_z})
-            writer.add_summary(summary_str, counter)
-
-            # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-            _, summary_str = sess.run([g_optim, g_sum],
-                                           feed_dict={z: batch_z})
-            writer.add_summary(summary_str, counter)
-
-            errD_fake = sess.run(d_loss_fake, feed_dict={z: batch_z})
-            errD_real = sess.run(d_loss_real)
-            errG = sess.run(g_loss, feed_dict={z: batch_z})
-            counter += 1
-            # # D optimization
-            # images_inf_eval, _, summary_str = sess.run([images_inf, d_optim, d_sum], {z: batch_z})
-            # writer.add_summary(summary_str, counter)
-            #
-            # # twice G optimization
-            # _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
-            # writer.add_summary(summary_str, counter)
-            # _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
-            # writer.add_summary(summary_str, counter)
-            #
-            # errD_fake = sess.run(d_loss_fake, {z: batch_z})
-            # errD_real = sess.run(d_loss_real)
-            # errG = sess.run(g_loss, {z: batch_z})
-            # print("epochs: %02d %04d/%04d time: %4.4f, d_loss: %.8f (F:%.8f, R:%.8f), g_loss: %.8f" % (
-            #     epoch, idx, FLAGS.steps, time.time() - start_time, errD_fake + errD_real, errD_fake, errD_real, errG))
-
-            print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-                  % (epoch, idx, datas.batch_idxs,
-                     time.time() - start_time, errD_fake + errD_real, errG))
-
-            # print("epochs: %02d %04d/%04d time: %4.4f, d_loss: %.8f (F:%.8f, R:%.8f), g_loss:" % (
-            #     epoch, idx, FLAGS.steps, time.time() - start_time, errD_fake + errD_real, errD_fake, errD_real))
-
-            if np.mod(counter, 10) == 1:
-                print("generate samples.")
-                generated_image_eval = sess.run(generate_images, {z: sample_z})
-                out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
-                if not gfile.Exists(out_dir):
-                    gfile.MakeDirs(out_dir)
-                filename = os.path.join(out_dir, 'out_%05d.png' % counter)
-                with open(filename, 'wb') as f:
-                    f.write(generated_image_eval)
-
-                # try:
-                #     print("==")
-                #     generate_images_val, d_loss = sess.run([sampler, d_loss], feed_dict={z: sample_z})
-                #     print(generate_images_val.shape)
-                #     print("[Sample] d_loss: %.8f, g_loss: " % (d_loss))
-                #     utils.save_images(generate_images_val, [8, 8],
-                #                 './{}/train_{:02d}_{:04d}.png'.format("test", epoch, idx))
-                #     print("complete")
-                # except Exception as e:
-                #     print("one pic error!...: %s" % e)
-
-        if np.mod(epoch, 10) == 0:
-            out_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
-            if not gfile.Exists(out_dir):
-                gfile.MakeDirs(out_dir)
-            out_path = os.path.join(out_dir, 'model.ckpt')
-            saver.save(sess, out_path, global_step=epoch)
-    coord.request_stop()
-    coord.join(threads)
-    sess.close()
-
-
 def train():
     # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
     datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
@@ -294,7 +118,7 @@ def train():
     saver = tf.train.Saver()
 
     # sampling from z
-    generate_images = dcgan.generate_images(z, 4, 4)
+    generate_images = dcgan.generate_images(z, 8, 8)
 
     # initialization
     init_op = tf.global_variables_initializer()
@@ -362,7 +186,7 @@ def train():
 
 def main(_):
     print("face DCGANs.")
-    train_org()
+    train()
 
 
 if __name__ == '__main__':

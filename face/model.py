@@ -16,7 +16,7 @@ class Generator:
         self.g_bn2 = mp.BatchNorm(name='g_bn2')
         self.g_bn3 = mp.BatchNorm(name='g_bn3')
 
-    def sampler(self, z, reuse=False, trainable=False):
+    def sampler(self, z, reuse=True, trainable=True):
         with tf.variable_scope("generator") as scope:
             if reuse:
                 scope.reuse_variables()

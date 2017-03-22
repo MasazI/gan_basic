@@ -66,7 +66,7 @@ def conv2d_bn(scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd
             'weights',
             shape=shape,
             stddev=0.01,
-            wd=0.0,  # not use weight decay
+            wd=wd,  # not use weight decay
             trainable=trainable
         )
         conv = tf.nn.conv2d(inputs, kernel, stride, padding=padding)

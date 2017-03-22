@@ -50,7 +50,8 @@ class Dataset:
         image = tf.image.crop_to_bounding_box(image, offset_height=20, offset_width=20, target_height=input_height, target_width=input_width)
         image = tf.cast(image, tf.float32)
         image = tf.image.resize_images(image, (input_height, input_width))
+        image = tf.subtract(tf.div(image, 127.5), 1.0)
         min_fraction_of_examples_in_queue = 0.4
-        min_queue_examples = int(1000 * min_fraction_of_examples_in_queue)
+        min_queue_examples = int(10000 * min_fraction_of_examples_in_queue)
         print ('filling queue with %d train images before starting to train. This will take a few minutes.' % min_queue_examples)
         return self._generate_image_and_label_batch(image, min_queue_examples)
