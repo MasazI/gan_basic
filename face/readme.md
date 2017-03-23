@@ -1,4 +1,4 @@
-# mnist
+# face
 DCGANs for face.
 ```
 python task.py
