@@ -12,3 +12,8 @@ def D_train_op(d_loss, d_vars, learning_rate, beta1):
 def G_train_op(g_loss, g_vars, learning_rate, beta1):
     g_optim = tf.train.AdamOptimizer(learning_rate, beta1=beta1).minimize(g_loss, var_list=g_vars)
     return g_optim
+
+
+def R_train_op(r_loss, r_vars, learning_rate, beta1):
+    r_optim = tf.train.AdamOptimizer(learning_rate, beta1=beta1).minimize(r_loss, var_list=r_vars)
+    return r_optim
