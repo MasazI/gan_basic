@@ -16,7 +16,7 @@ from tensorflow.python.platform import gfile
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
+flags.DEFINE_integer("epochs", 10, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
@@ -151,7 +151,7 @@ def train():
             #     with open(filename, 'wb') as f:
             #         f.write(generated_image_eval)
             counter += 1
-        if np.mod(epoch, 10) == 0:
+        if np.mod(epoch, 2) == 0:
             out_dir = os.path.join(FLAGS.reverser_model_name, FLAGS.checkpoint_dir)
             if not gfile.Exists(out_dir):
                 gfile.MakeDirs(out_dir)
