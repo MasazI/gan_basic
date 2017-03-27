@@ -8,6 +8,7 @@ import dataset
 import model
 from train_op import D_train_op
 from train_op import G_train_op
+from train_op import R_train_op
 
 import numpy as np
 import tensorflow as tf
@@ -15,7 +16,7 @@ from tensorflow.python.platform import gfile
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
+flags.DEFINE_integer("epochs", 10, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
@@ -35,6 +36,7 @@ flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv laye
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
 flags.DEFINE_string("model_name", "face", "model_name")
+flags.DEFINE_string("reverser_model_name", "rface", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -46,41 +48,33 @@ class DCGAN():
         self.model_name = model_name
         self.checkpoint_dir = checkpoint_dir
 
-    def step(self, images, z):
+    def step(self, z):
         z_sum = tf.summary.histogram("z", z)
 
+        # generater
         self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
-        self.G = self.generator.inference(z)
+        # self.G = self.generator.inference(z)
 
-        # descriminator inference using true images
-        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
-        self.D1, D1_logits = self.discriminator.inference(images)
+        # sampler using generator
+        self.samples = self.generator.sampler(z, reuse=False, trainable=False)
 
-        # descriminator inference using sampling with G
-        self.samples = self.generator.sampler(z, reuse=True)
-        self.D2, D2_logits = self.discriminator.inference(self.G, reuse=True)
+        # reverser
+        self.reverser = model.Reverser(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
+        self.R1, R1_logits = self.reverser.inference(self.samples)
+        R_sum = tf.summary.histogram("R", self.R1)
 
-        d1_sum = tf.summary.histogram("d1", self.D1)
-        d2_sum = tf.summary.histogram("d2", self.D2)
-        G_sum = tf.summary.histogram("G", self.G)
 
-        return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
+        # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
+        # return D2_logits, G_sum, z_sum, d1_sum, d2_sum
+        return R1_logits, R_sum, z_sum
 
-    def cost(self, D1_logits, D2_logits):
-        # real image loss (1) for descriminator
-        d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_logits, labels=tf.ones_like(self.D1)))
-        # fake image loss (0) for descriminator
-        d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits, labels=tf.zeros_like(self.D2)))
-        # fake image loss (1) for generator
-        g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits, labels=tf.ones_like(self.D2)))
+    def cost(self, R1_logits, z_noise):
+        # loss
+        r_loss = tf.reduce_mean(tf.square(R1_logits - z_noise))
 
         # summary
-        d_loss_real_sum = tf.summary.scalar("d_loss_real", d_loss_real)
-        d_loss_fake_sum = tf.summary.scalar("d_loss_fake", d_loss_fake)
-        d_loss = d_loss_real + d_loss_fake
-        g_loss_sum = tf.summary.scalar("g_loss", g_loss)
-        d_loss_sum = tf.summary.scalar("d_loss", d_loss)
-        return d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss
+        r_loss_sum = tf.summary.scalar("r_loss", r_loss)
+        return r_loss, r_loss_sum
 
     def generate_images(self, z, row=8, col=8):
         images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
@@ -97,28 +91,23 @@ def train():
     # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
     datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
                         FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
-    images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
+    # images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    images_inf, logits1, logits2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss = dcgan.cost(
-        logits1, logits2)
+    R1_logits, R_sum, z_sum = dcgan.step(z)
+    r_loss, r_loss_sum = dcgan.cost(R1_logits, z)
 
     # trainable variables
     t_vars = tf.trainable_variables()
-    d_vars = [var for var in t_vars if 'd_' in var.name]
-    g_vars = [var for var in t_vars if 'g_' in var.name]
+    #g_vars = [var for var in t_vars if 'g_' in var.name]
+    r_vars = [var for var in t_vars if 'r_' in var.name]
     # train operations
-    d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
-    g_optim = G_train_op(g_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
+    r_optim = R_train_op(r_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
 
     # saver
     saver = tf.train.Saver()
-
-    # sampling from z
-    generate_images = dcgan.generate_images(z, 8, 8)
 
     # initialization
     init_op = tf.global_variables_initializer()
@@ -131,19 +120,8 @@ def train():
     # run
     sess.run(init_op)
 
-    # load trained parameters
-    model_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
-    ckpt = tf.train.get_checkpoint_state(model_dir)
-    if ckpt and ckpt.model_checkpoint_path:
-        saver.restore(sess, ckpt.model_checkpoint_path)
-    else:
-        print("No checkpoint file found")
-        exit()
-    print("Model restored.")
-
     # summary
-    g_sum = tf.summary.merge([z_sum, d2_sum, G_sum, d_loss_fake_sum, g_loss_sum])
-    d_sum = tf.summary.merge([z_sum, d1_sum, d_loss_real_sum, d_loss_sum])
+    r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -155,34 +133,26 @@ def train():
         for idx in xrange(0, int(datas.batch_idxs)):
             batch_z = np.random.uniform(-1, 1, [FLAGS.batch_size, FLAGS.z_dim]).astype(np.float32)
 
-            # D optimization
-            images_inf_eval, _, summary_str = sess.run([images_inf, d_optim, d_sum], {z: batch_z})
+            # R optimization
+            _, summary_str = sess.run([r_optim, r_sum], {z: batch_z})
             writer.add_summary(summary_str, counter)
 
-            # twice G optimization
-            _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
-            writer.add_summary(summary_str, counter)
-            _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
-            writer.add_summary(summary_str, counter)
+            errR = sess.run(r_loss, {z: batch_z})
+            print("epochs: %02d %04d/%04d time: %4.4f, r_loss: %.8f" % (
+                epoch, idx, FLAGS.steps, time.time() - start_time, errR))
 
-            errD_fake = sess.run(d_loss_fake, {z: batch_z})
-            errD_real = sess.run(d_loss_real)
-            errG = sess.run(g_loss, {z: batch_z})
-            print("epochs: %02d %04d/%04d time: %4.4f, d_loss: %.8f (F:%.8f, R:%.8f), g_loss: %.8f" % (
-                epoch, idx, FLAGS.steps, time.time() - start_time, errD_fake + errD_real, errD_fake, errD_real, errG))
-
-            if np.mod(counter, 100) == 1:
-                print("generate samples.")
-                generated_image_eval = sess.run(generate_images, {z: batch_z})
-                out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
-                if not gfile.Exists(out_dir):
-                    gfile.MakeDirs(out_dir)
-                filename = os.path.join(out_dir, 'out_%05d.png' % counter)
-                with open(filename, 'wb') as f:
-                    f.write(generated_image_eval)
+            # if np.mod(counter, 100) == 1:
+            #     print("generate samples.")
+            #     generated_image_eval = sess.run(generate_images, {z: batch_z})
+            #     out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
+            #     if not gfile.Exists(out_dir):
+            #         gfile.MakeDirs(out_dir)
+            #     filename = os.path.join(out_dir, 'out_%05d.png' % counter)
+            #     with open(filename, 'wb') as f:
+            #         f.write(generated_image_eval)
             counter += 1
-        if np.mod(epoch, 10) == 0:
-            out_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
+        if np.mod(epoch, 2) == 0:
+            out_dir = os.path.join(FLAGS.reverser_model_name, FLAGS.checkpoint_dir)
             if not gfile.Exists(out_dir):
                 gfile.MakeDirs(out_dir)
             out_path = os.path.join(out_dir, 'model.ckpt')
@@ -193,7 +163,7 @@ def train():
 
 
 def main(_):
-    print("face DCGANs.")
+    print("face DCGANs Reverse.")
     train()
 
 
