@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import random
 from glob import glob
+import csv
 import tensorflow as tf
 
 class Dataset:
@@ -55,3 +56,13 @@ class Dataset:
         min_queue_examples = int(10000 * min_fraction_of_examples_in_queue)
         print ('filling queue with %d train images before starting to train. This will take a few minutes.' % min_queue_examples)
         return self._generate_image_and_label_batch(image, min_queue_examples)
+
+
+def load_csv(path):
+    print("load csv: %s" % (path))
+    images = []
+    with open(path, 'r') as f:
+        rows = csv.reader(f)
+        for row in rows:
+            images.append(row)
+    return images
