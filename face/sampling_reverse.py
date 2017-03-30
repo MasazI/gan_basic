@@ -11,6 +11,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import model
+import features
 from dataset import load_csv
 import tensorflow as tf
 from tensorflow.python.platform import gfile
@@ -33,7 +34,7 @@ flags.DEFINE_string("model_name", "rface", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
-flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
+flags.DEFINE_float('gpu_memory_fraction', 0.3, 'gpu memory fraction.')
 flags.DEFINE_string('image_path', '', 'path to image.')
 
 flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
@@ -110,15 +111,17 @@ def reverse(image_path, verbose=False):
                 print("vector:")
                 print(vectors_eval[0])
             vectors_evals.append(vectors_eval[0])
-        # TODO visualization
+
         if FLAGS.mode == 'sampling':
-            return vectors_evals
+            features_obj = features.Features(images, vectors_evals)
+
+            # TODO save features object
         else:
             # visualization
             print("Calculate NearestNeighbors:")
             X = np.array(vectors_evals)
             print(X.shape)
-            nbrs = NearestNeighbors(n_neighbors=2, algorithm='ball_tree').fit(X)
+            nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(X)
             distances, indices = nbrs.kneighbors(X)
             print("10 ramdom samples")
             sample_index= np.random.randint(FLAGS.db_size, size=100)
