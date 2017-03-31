@@ -22,7 +22,7 @@ flags.DEFINE_integer("batch_size", 144, "The size of batch images [64]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 flags.DEFINE_string("sample_type", "type1", "sample type name.")
 
-class DCGAN():
+class DCGAN_S():
     def __init__(self, model_name, checkpoint_dir):
         self.model_name = model_name
         self.checkpoint_dir = checkpoint_dir
@@ -59,9 +59,8 @@ class DCGAN():
         image = tf.concat(rows, axis=1)
         return tf.image.encode_png(tf.squeeze(image, [0]))
 
-
 def sampling():
-    dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
+    dcgan = DCGAN_S(FLAGS.model_name, FLAGS.checkpoint_dir)
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     # build model
@@ -76,6 +75,7 @@ def sampling():
     sess = tf.Session(config=tf.ConfigProto(
         allow_soft_placement=True,
         gpu_options=gpu_options))
+
     sess.run(tf.global_variables_initializer())
 
     # load parameters

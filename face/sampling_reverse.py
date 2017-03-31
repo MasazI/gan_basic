@@ -13,6 +13,7 @@ import matplotlib.image as mpimg
 import model
 import features
 from dataset import load_csv
+import sampling_from_vec
 import tensorflow as tf
 from tensorflow.python.platform import gfile
 import datetime
@@ -31,6 +32,7 @@ flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
 flags.DEFINE_string("model_name", "rface", "model_name")
+flags.DEFINE_string("g_model_name", "face", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
@@ -41,7 +43,9 @@ flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
 
 flags.DEFINE_integer("db_size", 10000, "original image width")
 
-class DCGAN():
+flags.DEFINE_integer("batch_size", 1, "The size of batch images [64]")
+
+class DCGAN_SR():
     def __init__(self, model_name, checkpoint_dir):
         self.model_name = model_name
         self.checkpoint_dir = checkpoint_dir
@@ -50,17 +54,24 @@ class DCGAN():
         # reverser
         self.reverser = model.Reverser(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
         self.R1, R1_logits = self.reverser.inference(samples)
-        # R_sum = tf.summary.histogram("R", self.R1)
 
         return R1_logits
 
 
 def reverse(image_path, verbose=False):
+    # input noize to generator
+    z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
+
+    # input image to reverser
     samples = tf.placeholder(
         tf.float32,
         [FLAGS.sample_num, FLAGS.image_height, FLAGS.image_width, FLAGS.c_dim],
         name='sample_inputs')
-    dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
+
+    # base model class
+    dcgan = DCGAN_SR(FLAGS.model_name, FLAGS.checkpoint_dir)
+
+    # generate vector
     vectors = dcgan.step(samples)
 
     # saver
@@ -155,7 +166,7 @@ def reverse(image_path, verbose=False):
                 out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
                 if not gfile.Exists(out_dir):
                     gfile.MakeDirs(out_dir)
-                out_path = os.path.join(out_dir, "%d_%s.jpg" % (i, utime))
+                out_path = os.path.join(out_dir, "%d_%s.png" % (i, utime))
                 plt.savefig(out_path)
 
     else:
@@ -167,14 +178,45 @@ def reverse(image_path, verbose=False):
         img_array = img_array[None, ...]
         vectors_eval = sess.run(vectors, {samples: img_array})
 
-        print("vector:")
-        print(vectors_eval[0])
+        input_vector = vectors_eval[0][None, ...]
+        print(input_vector)
+
+        sampling_from_vec.sampling(input_vector)
+
+        # regenerate_sample = sess.run(regenerate, {z: input_vector})
+        # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
+        # now = datetime.datetime.now()
+        # utime = now.strftime("%s")
+        # if not gfile.Exists(out_dir):
+        #     gfile.MakeDirs(out_dir)
+        # filename = os.path.join(out_dir, "%s.png" % (utime))
+        # with open(filename, 'wb') as f:
+        #     f.write(regenerate_sample)
+
+        # fig = plt.figure()
+        # a = fig.add_subplot(1, 2, 1)
+        # lum_img = mpimg.imread(image_path)
+        # imgplot = plt.imshow(lum_img)
+        # a.set_title('Original')
+        #
+        # a = fig.add_subplot(1, 2, 2)
+        # lum2_img = regenerate_sample
+        # imgplot = plt.imshow(lum2_img)
+        # a.set_title('Re Sampling')
+        #
+        # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
+        # if not gfile.Exists(out_dir):
+        #     gfile.MakeDirs(out_dir)
+        # now = datetime.datetime.now()
+        # utime = now.strftime("%s")
+        # out_path = os.path.join(out_dir, "%s.png" % (utime))
+        # plt.savefig(out_path)
+
 
     print("finish to predict.")
     coord.request_stop()
     coord.join(threads)
     sess.close()
-
 
 
 def main(_):

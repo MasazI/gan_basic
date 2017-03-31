@@ -16,7 +16,7 @@ from tensorflow.python.platform import gfile
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("epochs", 10, "Epoch to train [25]")
+flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
@@ -62,7 +62,6 @@ class DCGAN():
         self.reverser = model.Reverser(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
         self.R1, R1_logits = self.reverser.inference(self.samples)
         R_sum = tf.summary.histogram("R", self.R1)
-
 
         # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
         # return D2_logits, G_sum, z_sum, d1_sum, d2_sum
