@@ -14,13 +14,13 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face", "model_name")
-flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("sample_dir", "samples", "sample_name")
+flags.DEFINE_string("model_name", "panels", "model_name")
+flags.DEFINE_string("data_dir", "data/panels", "data dir path")
+flags.DEFINE_string("sample_dir", "samples_smooth", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-flags.DEFINE_integer("batch_size", 144, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 400, "The size of batch images [64]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
-flags.DEFINE_string("sample_type", "type1", "sample type name.")
+flags.DEFINE_string("sample_type", "type2", "sample type name.")
 
 class DCGAN_S():
     def __init__(self, model_name, checkpoint_dir):
@@ -90,16 +90,18 @@ def sampling():
 
     batch_z = np.zeros([FLAGS.batch_size, FLAGS.z_dim]).astype(np.float32)
     initial_value = 0
-    for i in xrange(FLAGS.batch_size):
-        batch_z[i, 30] = -1.0 + i*2.0/144.
+    for j in xrange(100):
+        for i in xrange(FLAGS.batch_size):
+           batch_z[i, j] = 1.0 - i*2.0/400.
+           batch_z[i, j+10] = -1.0 + i * 2.0 / 400.
 
-    generated_image_eval = sess.run(generate_images, {z: batch_z})
-    out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
-    if not gfile.Exists(out_dir):
-        gfile.MakeDirs(out_dir)
-    filename = os.path.join(out_dir, 'sampling_%s.png' % (FLAGS.sample_type))
-    with open(filename, 'wb') as f:
-        f.write(generated_image_eval)
+        generated_image_eval = sess.run(generate_images, {z: batch_z})
+        out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
+        if not gfile.Exists(out_dir):
+            gfile.MakeDirs(out_dir)
+        filename = os.path.join(out_dir, 'sampling_%s_dim%d.png' % (FLAGS.sample_type, j))
+        with open(filename, 'wb') as f:
+            f.write(generated_image_eval)
 
 def main(_):
     print("face DCGANs sampling.")
