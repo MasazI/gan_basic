@@ -35,17 +35,15 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm", "model_name")
+flags.DEFINE_string("model_name", "face", "model_name")
+flags.DEFINE_string("reverser_model_name", "rface", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("reverser_model_name", "rface_h_fm2", "model_name")
-
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 
-flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
-flags.DEFINE_bool("is_crop", True, "crop training images?")
-flags.DEFINE_float('fm_rate', 0.05, 'feature matching (reverser with discriminator)rate.')
+flags.DEFINE_integer("data_type", 2, "1: hollywood, 2: lfw")
+flags.DEFINE_bool("is_crop", False, "crop training images?")
 
 class DCGAN():
     def __init__(self, model_name, checkpoint_dir):
@@ -62,33 +60,22 @@ class DCGAN():
         # sampler using generator
         self.samples = self.generator.sampler(z, reuse=False, trainable=False)
 
-        # descriminator inference using true images
-        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
-        self.D2, D2_logits, D2_inter = self.discriminator.inference(self.samples, reuse=False, trainable=False)
-
         # reverser
         self.reverser = model.Reverser(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits, R1_inter = self.reverser.inference(self.samples)
+        self.R1, R1_logits = self.reverser.inference(self.samples)
         R_sum = tf.summary.histogram("R", self.R1)
 
         # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
         # return D2_logits, G_sum, z_sum, d1_sum, d2_sum
-        return R1_logits, R1_inter, D2_logits, D2_inter, R_sum, z_sum
+        return R1_logits, R_sum, z_sum
 
-    def cost(self, R1_logits, R1_inter, D2_logits, D2_inter, z_noise):
+    def cost(self, R1_logits, z_noise):
         # loss
         r_loss = tf.reduce_mean(tf.square(R1_logits - z_noise))
 
-        # r1 inter(sampling through reverser) and d2 inter(sampling through discriminator)
-        r1_inter = tf.reduce_mean(R1_inter, reduction_indices=(0))
-        d2_inter = tf.reduce_mean(D2_inter, reduction_indices=(0))
-        print("feature matching:")
-        print(tf.nn.l2_loss(r1_inter - d2_inter).shape)
-        fm_loss = tf.multiply(tf.nn.l2_loss(r1_inter - d2_inter), FLAGS.fm_rate)
-
         # summary
         r_loss_sum = tf.summary.scalar("r_loss", r_loss)
-        return r_loss, r_loss_sum, fm_loss
+        return r_loss, r_loss_sum
 
     def generate_images(self, z, row=8, col=8):
         images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
@@ -102,30 +89,23 @@ class DCGAN():
 
 
 def train():
-    if FLAGS.data_type == 1:
-        # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
-        datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=True)
-    elif FLAGS.data_type == 2:
-        datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=False)
-    else:
-        print("invalid data type.")
-        return
+    # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
+    datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+                        FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
     # images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    R1_logits, R1_inter, D2_logits, D2_inter, R_sum, z_sum = dcgan.step(z)
-    r_loss, r_loss_sum, fm_loss = dcgan.cost(R1_logits, R1_inter, D2_logits, D2_inter, z)
+    R1_logits, R_sum, z_sum = dcgan.step(z)
+    r_loss, r_loss_sum = dcgan.cost(R1_logits, z)
 
     # trainable variables
     t_vars = tf.trainable_variables()
     #g_vars = [var for var in t_vars if 'g_' in var.name]
     r_vars = [var for var in t_vars if 'r_' in var.name]
     # train operations
-    r_optim = R_train_op(r_loss + fm_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
+    r_optim = R_train_op(r_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
 
     # saver
     saver = tf.train.Saver()
@@ -159,9 +139,8 @@ def train():
             writer.add_summary(summary_str, counter)
 
             errR = sess.run(r_loss, {z: batch_z})
-            errFM = sess.run(fm_loss, {z: batch_z})
-            print("epochs: %02d %04d/%04d time: %4.4f, r_loss: %.8f, fm_loss: %.8f" % (
-                epoch, idx, FLAGS.steps, time.time() - start_time, errR, errFM))
+            print("epochs: %02d %04d/%04d time: %4.4f, r_loss: %.8f" % (
+                epoch, idx, FLAGS.steps, time.time() - start_time, errR))
 
             # if np.mod(counter, 100) == 1:
             #     print("generate samples.")

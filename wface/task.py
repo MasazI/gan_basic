@@ -41,6 +41,10 @@ flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the 
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 flags.DEFINE_float('c_param', 0.01, 'discriminator clip parameters.')
 
+flags.DEFINE_integer("data_type", 2, "1: hollywood, 2: lfw")
+flags.DEFINE_bool("is_crop", False, "crop training images?")
+
+
 
 class DCGAN():
     def __init__(self, model_name, checkpoint_dir):
@@ -95,9 +99,17 @@ class DCGAN():
 
 
 def train():
-    # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
-    datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                        FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
+    if FLAGS.data_type == 1:
+        # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
+        datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=True)
+    elif FLAGS.data_type == 2:
+        datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=False)
+    else:
+        print("invalid data type.")
+        return
+
     images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
@@ -165,8 +177,8 @@ def train():
                 writer.add_summary(summary_str, counter)
 
             # twice G optimization
-            _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
-            writer.add_summary(summary_str, counter)
+            # _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
+            # writer.add_summary(summary_str, counter)
             _, summary_str = sess.run([g_optim, g_sum], {z: batch_z})
             writer.add_summary(summary_str, counter)
 

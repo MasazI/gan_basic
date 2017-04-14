@@ -175,7 +175,7 @@ class Descriminator:
 
             # linear projection (skip h3)
             h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=reuse)
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.sigmoid(h4), h4, h3
 
 
 class Reverser:
@@ -203,6 +203,7 @@ class Reverser:
                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             h0 = mp.lrelu(conv_h0)
             print(h0.get_shape())
+
             # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
             conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('r_conv_h1', h0,
                                                       [5, 5, h0.get_shape()[-1], self.first_conv_dim*2],
@@ -237,7 +238,7 @@ class Reverser:
 
             # linear projection (skip h3)
             h4 = mp.linear_project('r_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), self.z_dim, reuse=reuse)
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.sigmoid(h4), h4, h3
 
 
 if __name__ == '__main__':

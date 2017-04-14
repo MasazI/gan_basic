@@ -11,7 +11,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import model
-import features
 from dataset import load_csv
 import sampling_from_vec
 import tensorflow as tf
@@ -31,17 +30,19 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "rface", "model_name")
-flags.DEFINE_string("g_model_name", "face", "model_name")
+flags.DEFINE_string("model_name", "face_h_fm", "model_name")
+flags.DEFINE_string("data_dir", "data/face", "data dir path")
+flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
 flags.DEFINE_float('gpu_memory_fraction', 0.3, 'gpu memory fraction.')
 flags.DEFINE_string('image_path', '', 'path to image.')
 
-flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
+flags.DEFINE_string('mode', 'sampling', 'running mode. <sampling, visualize>')
 
-flags.DEFINE_integer("db_size", 30000, "original image width")
+flags.DEFINE_integer("db_size", 50000, "original image width")
 
 flags.DEFINE_integer("batch_size", 1, "The size of batch images [64]")
 
@@ -51,11 +52,12 @@ class DCGAN_SR():
         self.checkpoint_dir = checkpoint_dir
 
     def step(self, samples):
-        # reverser
-        self.reverser = model.Reverser(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits = self.reverser.inference(samples)
 
-        return R1_logits
+        # descriminator inference using true images
+        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
+        self.D1, D1_logits, D1_inter = self.discriminator.inference(samples)
+
+        return self.D1
 
 
 def reverse(image_path, verbose=False):
@@ -71,8 +73,8 @@ def reverse(image_path, verbose=False):
     # base model class
     dcgan = DCGAN_SR(FLAGS.model_name, FLAGS.checkpoint_dir)
 
-    # generate vector
-    vectors = dcgan.step(samples)
+    # generate vector and discriminator output
+    d_logits = dcgan.step(samples)
 
     # saver
     saver = tf.train.Saver()
@@ -116,16 +118,15 @@ def reverse(image_path, verbose=False):
             # input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
             img_array = img_array / 127.5 - 1.0
             img_array = img_array[None, ...]
-            vectors_eval = sess.run(vectors, {samples: img_array})
+            d_logits_eval = sess.run([d_logits], {samples: img_array})
             if verbose:
-                print(vectors_eval)
-                print("vector:")
-                print(vectors_eval[0])
-            vectors_evals.append(vectors_eval[0])
+                print("discriminator confidence:")
+                print(d_logits_eval[0])
+            #vectors_evals.append(vectors_eval[0])
 
         if FLAGS.mode == 'sampling':
-            features_obj = features.Features(images, vectors_evals)
-
+            #features_obj = features.Features(images, vectors_evals)
+            pass
             # TODO save features object
         else:
             # visualization
@@ -135,15 +136,14 @@ def reverse(image_path, verbose=False):
             nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(X)
             distances, indices = nbrs.kneighbors(X)
             print("10 ramdom samples")
-            sample_index= np.random.randint(FLAGS.db_size, size=1000)
+            sample_index= np.random.randint(FLAGS.db_size, size=10000)
             for i, index in enumerate(sample_index):
                 nbrs_sample = indices[index]
                 nbrs_distance = distances[index]
                 sample_relate_image = images[nbrs_sample[0]][0]
                 top_1_index = nbrs_sample[1]
                 top_1_nbrs_distance = nbrs_distance[1]
-
-                if top_1_nbrs_distance > 3.1:
+                if top_1_nbrs_distance >= 3.5:
                     continue
 
                 nn_image = images[top_1_index][0]
@@ -180,12 +180,9 @@ def reverse(image_path, verbose=False):
         #input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
         img_array = img_array/127.5 - 1.0
         img_array = img_array[None, ...]
-        vectors_eval = sess.run(vectors, {samples: img_array})
+        d_logits_eval = sess.run([d_logits], {samples: img_array})
 
-        input_vector = vectors_eval[0][None, ...]
-        print(input_vector)
-
-        sampling_from_vec.sampling(input_vector)
+        print(d_logits_eval)
 
         # regenerate_sample = sess.run(regenerate, {z: input_vector})
         # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
@@ -229,7 +226,7 @@ def main(_):
         print("Please set specific image_path. --image_path <path to image or csv file witch include path>")
         return
     image_path = FLAGS.image_path
-    reverse(image_path)
+    reverse(image_path, verbose=True)
 
 
 if __name__ == '__main__':
