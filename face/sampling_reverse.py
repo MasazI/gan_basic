@@ -42,7 +42,7 @@ flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the 
 flags.DEFINE_float('gpu_memory_fraction', 0.3, 'gpu memory fraction.')
 flags.DEFINE_string('image_path', '', 'path to image.')
 
-flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
+flags.DEFINE_string('mode', 'distribution', 'running mode. <sampling, visualize>')
 
 flags.DEFINE_integer("db_size", 50000, "original image width")
 
@@ -110,9 +110,12 @@ def reverse(image_path, verbose=False):
             if i == FLAGS.db_size:
                 break
             print("No.%d %s" % (i, image[0]))
-            pil_img = Image.open(image[0])
+            pil_img = Image.open(image[0], mode="r")
             pil_img = pil_img.resize((FLAGS.image_height_org, FLAGS.image_width_org))
             img_array = np.asarray(pil_img)
+            if img_array.size != FLAGS.image_height_org * FLAGS.image_width_org * FLAGS.c_dim:
+                continue
+            # img_array = np.reshape(img_array, (FLAGS.image_height_org, FLAGS.image_width_org))
             height_diff = FLAGS.image_height_org - FLAGS.image_height
             width_diff = FLAGS.image_width_org - FLAGS.image_width
             img_array = img_array[int(height_diff/2):int(height_diff/2)+FLAGS.image_height, int(width_diff/2):int(width_diff/2)+FLAGS.image_width, :]
@@ -130,7 +133,11 @@ def reverse(image_path, verbose=False):
             #features_obj = features.Features(images, vectors_evals)
             pass
             # TODO save features object
-        else:
+        elif FLAGS.mode == 'distribution':
+            pass    
+
+
+        elif FLAGS.mode == 'visualize':
             # visualization
             print("Calculate NearestNeighbors:")
             X = np.array(vectors_evals)

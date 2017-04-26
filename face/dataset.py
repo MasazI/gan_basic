@@ -9,12 +9,12 @@ import csv
 import tensorflow as tf
 
 class Dataset:
-    def __init__(self, datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4, type=1, crop=False):
-        if type == 1:
+    def __init__(self, datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4, type=1, crop=False, filename="train.csv"):
+        if type == 1 or type == 3:
             # hollywood
             self.data = glob(os.path.join(datadir, "*.jpg"))
-            self.train_csv = "train.csv"
-            with open(self.train_csv, "w") as f:
+            self.data_csv = filename
+            with open(self.data_csv, "w") as f:
                 for image in self.data:
                     f.write(image)
                     f.write("\n")
@@ -30,8 +30,8 @@ class Dataset:
         elif type == 2:
             # lfw
             self.data = glob(os.path.join(datadir, "*.jpg"))
-            self.train_csv = "train.csv"
-            with open(self.train_csv, "w") as f:
+            self.data_csv = filename
+            with open(self.data_csv, "w") as f:
                 for image in self.data:
                     f.write(image)
                     f.write("\n")
@@ -59,7 +59,7 @@ class Dataset:
         return images
 
     def get_inputs(self, input_height, input_width):
-        filename_queue = tf.train.string_input_producer([self.train_csv], shuffle=True)
+        filename_queue = tf.train.string_input_producer([self.data_csv], shuffle=True)
         reader = tf.TextLineReader()
         _, serialized_example = reader.read(filename_queue)
         filename = tf.decode_csv(serialized_example, [["path"]])
