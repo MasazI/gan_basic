@@ -177,7 +177,7 @@ class Descriminator:
             h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=reuse)
 
             # wgan used h4 (not sigmoid)
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.sigmoid(h4), h4, h3
 
 
 class Reverser:

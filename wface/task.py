@@ -34,16 +34,16 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face", "model_name")
+flags.DEFINE_string("model_name", "wface_h_fm", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 flags.DEFINE_float('c_param', 0.01, 'discriminator clip parameters.')
 
-flags.DEFINE_integer("data_type", 2, "1: hollywood, 2: lfw")
+flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
 flags.DEFINE_bool("is_crop", False, "crop training images?")
-
+flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
 
 
 class DCGAN():
@@ -59,19 +59,19 @@ class DCGAN():
 
         # descriminator inference using true images
         self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
-        self.D1, D1_logits = self.discriminator.inference(images)
+        self.D1, D1_logits, D1_inter = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G
         self.samples = self.generator.sampler(z, reuse=True)
-        self.D2, D2_logits = self.discriminator.inference(self.G, reuse=True)
+        self.D2, D2_logits, D2_inter  = self.discriminator.inference(self.G, reuse=True)
 
         d1_sum = tf.summary.histogram("d1", self.D1)
         d2_sum = tf.summary.histogram("d2", self.D2)
         G_sum = tf.summary.histogram("G", self.G)
 
-        return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
+        return images, D1_logits, D2_logits, D1_inter, D2_inter, G_sum, z_sum, d1_sum, d2_sum
 
-    def cost(self, D1_logits, D2_logits):
+    def cost(self, D1_logits, D2_logits, D1_inter, D2_inter):
         # real image loss (1) for descriminator
         d_loss_real = tf.reduce_mean(self.D1)
         # fake image loss (1) for descriminator
@@ -79,13 +79,20 @@ class DCGAN():
         # fake image loss (1) for generator
         g_loss = tf.reduce_mean(self.D2)
 
+        # fake images loss (1) for generator with feature matching
+        d1_inter = tf.reduce_mean(D1_inter, reduction_indices=(0))
+        d2_inter = tf.reduce_mean(D2_inter, reduction_indices=(0))
+        print("feature matching:")
+        print(tf.nn.l2_loss(d1_inter - d2_inter).shape)
+        fm_loss = tf.multiply(tf.nn.l2_loss(d1_inter - d2_inter), FLAGS.fm_rate)
+
         # summary
         d_loss_real_sum = tf.summary.scalar("d_loss_real", d_loss_real)
         d_loss_fake_sum = tf.summary.scalar("d_loss_fake", d_loss_fake)
         d_loss = d_loss_real - d_loss_fake
         g_loss_sum = tf.summary.scalar("g_loss", g_loss)
         d_loss_sum = tf.summary.scalar("d_loss", d_loss)
-        return d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss
+        return d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss
 
     def generate_images(self, z, row=8, col=8):
         images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
@@ -102,10 +109,10 @@ def train():
     if FLAGS.data_type == 1:
         # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
         datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=True)
+                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=FLAGS.is_crop)
     elif FLAGS.data_type == 2:
         datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=False)
+                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=FLAGS.is_crop)
     else:
         print("invalid data type.")
         return
@@ -115,9 +122,9 @@ def train():
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    images_inf, logits1, logits2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss = dcgan.cost(
-        logits1, logits2)
+    images_inf, logits1, logits2, inter1, inter2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
+    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss = dcgan.cost(
+        logits1, logits2, inter1, inter2)
 
     # trainable variables
     t_vars = tf.trainable_variables()
@@ -125,7 +132,7 @@ def train():
     g_vars = [var for var in t_vars if 'g_' in var.name]
     # train operations
     d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
-    g_optim = G_train_op(g_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
+    g_optim = G_train_op(g_loss + fm_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
 
     # clip d parameters
     clip_updates = [tf.assign(var, tf.clip_by_value(var, -FLAGS.c_param, FLAGS.c_param)) for var in d_vars]
