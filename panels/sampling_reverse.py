@@ -31,7 +31,11 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "rface", "model_name")
+flags.DEFINE_string("model_name", "face_lfw", "model_name")
+flags.DEFINE_string("data_dir", "data/face_lfw", "data dir path")
+flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+
+# flags.DEFINE_string("model_name", "rface", "model_name")
 flags.DEFINE_string("g_model_name", "face", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -41,7 +45,7 @@ flags.DEFINE_string('image_path', '', 'path to image.')
 
 flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
 
-flags.DEFINE_integer("db_size", 30000, "original image width")
+flags.DEFINE_integer("db_size", 13233, "original image width")
 
 flags.DEFINE_integer("batch_size", 1, "The size of batch images [64]")
 
@@ -142,9 +146,9 @@ def reverse(image_path, verbose=False):
                 sample_relate_image = images[nbrs_sample[0]][0]
                 top_1_index = nbrs_sample[1]
                 top_1_nbrs_distance = nbrs_distance[1]
-
-                if top_1_nbrs_distance > 3.1:
+                if top_1_nbrs_distance >= 3.1:
                     continue
+
 
                 nn_image = images[top_1_index][0]
                 print("No.%d sample similarity." % i)

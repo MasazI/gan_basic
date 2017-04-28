@@ -11,7 +11,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import model
-import features
+import dataset
 from dataset import load_csv
 import sampling_from_vec
 import tensorflow as tf
@@ -29,21 +29,30 @@ flags.DEFINE_integer("image_height", 64, "The size of image to use (will be cent
 flags.DEFINE_integer("image_width", 64, "The size of image to use (will be center cropped) [64]")
 flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
+flags.DEFINE_integer("image_depth_org", 3, "original image depth")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "rface", "model_name")
-flags.DEFINE_string("g_model_name", "face", "model_name")
+flags.DEFINE_integer("num_threads", 4, "number of threads using queue")
+flags.DEFINE_integer("data_type", 3, "1: hollywood, 2: lfw, 3: test")
+
+flags.DEFINE_string("model_name", "face_h_fm", "model_name")
+flags.DEFINE_string("data_dir", "data/face", "data dir path")
+flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
 flags.DEFINE_float('gpu_memory_fraction', 0.3, 'gpu memory fraction.')
 flags.DEFINE_string('image_path', '', 'path to image.')
 
-flags.DEFINE_string('mode', 'visualize', 'running mode. <sampling, visualize>')
+flags.DEFINE_string('mode', 'batch', 'running mode. <single, batch>')
 
-flags.DEFINE_integer("db_size", 30000, "original image width")
+flags.DEFINE_integer("db_size", 50000, "original image width")
 
 flags.DEFINE_integer("batch_size", 1, "The size of batch images [64]")
+flags.DEFINE_float("anomaly_threshold", 0.002, "The threshold of anomaly detection.")
+flags.DEFINE_string("test_dir", "data/test/00", "test data dir path")
+flags.DEFINE_string("anomaly_dir", "anom", "anomaly derectory")
 
 class DCGAN_SR():
     def __init__(self, model_name, checkpoint_dir):
@@ -51,14 +60,15 @@ class DCGAN_SR():
         self.checkpoint_dir = checkpoint_dir
 
     def step(self, samples):
-        # reverser
-        self.reverser = model.Reverser(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits = self.reverser.inference(samples)
 
-        return R1_logits
+        # descriminator inference using true images
+        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
+        self.D1, D1_logits, D1_inter = self.discriminator.inference(samples)
+
+        return self.D1
 
 
-def reverse(image_path, verbose=False):
+def detection(image_path, verbose=False):
     # input noize to generator
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
@@ -71,8 +81,8 @@ def reverse(image_path, verbose=False):
     # base model class
     dcgan = DCGAN_SR(FLAGS.model_name, FLAGS.checkpoint_dir)
 
-    # generate vector
-    vectors = dcgan.step(samples)
+    # generate vector and discriminator output
+    d_logits = dcgan.step(samples)
 
     # saver
     saver = tf.train.Saver()
@@ -110,22 +120,38 @@ def reverse(image_path, verbose=False):
             pil_img = Image.open(image[0])
             pil_img = pil_img.resize((FLAGS.image_height_org, FLAGS.image_width_org))
             img_array = np.asarray(pil_img)
+            if img_array.size != FLAGS.image_height_org * FLAGS.image_width_org * FLAGS.c_dim:
+                continue
             height_diff = FLAGS.image_height_org - FLAGS.image_height
             width_diff = FLAGS.image_width_org - FLAGS.image_width
             img_array = img_array[int(height_diff/2):int(height_diff/2)+FLAGS.image_height, int(width_diff/2):int(width_diff/2)+FLAGS.image_width, :]
             # input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
             img_array = img_array / 127.5 - 1.0
             img_array = img_array[None, ...]
-            vectors_eval = sess.run(vectors, {samples: img_array})
+            d_logits_eval = sess.run([d_logits], {samples: img_array})
             if verbose:
-                print(vectors_eval)
-                print("vector:")
-                print(vectors_eval[0])
-            vectors_evals.append(vectors_eval[0])
+                print("discriminator confidence:")
+                print(d_logits_eval[0])
+            #vectors_evals.append(vectors_eval[0])
+            if d_logits_eval[0] < FLAGS.anomaly_threshold:
+                print(d_logits_eval)
+                print("anomaly: %s: %f" % (image[0], d_logits_eval[0]))
+                fig = plt.figure()
+                a = fig.add_subplot(1, 1, 1)
+                lum2_img = pil_img
+                imgplot = plt.imshow(lum2_img)
+                a.set_title('discriminator detection')
+                a.set_xlabel("confidence: %f" % d_logits_eval[0])
+                out_dir = os.path.join(FLAGS.model_name, FLAGS.anomaly_dir)
+                if not gfile.Exists(out_dir):
+                    gfile.MakeDirs(out_dir)
+                out_path = os.path.join(out_dir, "anom_%d.png" % (i))
+                plt.savefig(out_path)
+
 
         if FLAGS.mode == 'sampling':
-            features_obj = features.Features(images, vectors_evals)
-
+            #features_obj = features.Features(images, vectors_evals)
+            pass
             # TODO save features object
         else:
             # visualization
@@ -135,15 +161,14 @@ def reverse(image_path, verbose=False):
             nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto').fit(X)
             distances, indices = nbrs.kneighbors(X)
             print("10 ramdom samples")
-            sample_index= np.random.randint(FLAGS.db_size, size=1000)
+            sample_index= np.random.randint(FLAGS.db_size, size=10000)
             for i, index in enumerate(sample_index):
                 nbrs_sample = indices[index]
                 nbrs_distance = distances[index]
                 sample_relate_image = images[nbrs_sample[0]][0]
                 top_1_index = nbrs_sample[1]
                 top_1_nbrs_distance = nbrs_distance[1]
-
-                if top_1_nbrs_distance > 3.1:
+                if top_1_nbrs_distance >= 3.5:
                     continue
 
                 nn_image = images[top_1_index][0]
@@ -180,12 +205,9 @@ def reverse(image_path, verbose=False):
         #input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
         img_array = img_array/127.5 - 1.0
         img_array = img_array[None, ...]
-        vectors_eval = sess.run(vectors, {samples: img_array})
+        d_logits_eval = sess.run([d_logits], {samples: img_array})
 
-        input_vector = vectors_eval[0][None, ...]
-        print(input_vector)
-
-        sampling_from_vec.sampling(input_vector)
+        print(d_logits_eval)
 
         # regenerate_sample = sess.run(regenerate, {z: input_vector})
         # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)
@@ -216,7 +238,6 @@ def reverse(image_path, verbose=False):
         # out_path = os.path.join(out_dir, "%s.png" % (utime))
         # plt.savefig(out_path)
 
-
     print("finish to predict.")
     coord.request_stop()
     coord.join(threads)
@@ -225,11 +246,20 @@ def reverse(image_path, verbose=False):
 
 def main(_):
     print("face DCGANs Reverse.")
-    if FLAGS.image_path == "" or FLAGS.image_path is None:
-        print("Please set specific image_path. --image_path <path to image or csv file witch include path>")
+    if FLAGS.mode == "single":
+        if FLAGS.image_path == "" or FLAGS.image_path is None:
+            print("Please set specific image_path. --image_path <path to image or csv file witch include path>")
+            return
+        image_path = FLAGS.image_path
+    elif FLAGS.mode == "batch":
+        test_datas = dataset.Dataset(FLAGS.test_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+                                     FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type,
+                                     crop=False, filename="test.csv")
+        image_path = test_datas.data_csv
+    else:
+        print("invalid mode.")
         return
-    image_path = FLAGS.image_path
-    reverse(image_path)
+    detection(image_path, verbose=False)
 
 
 if __name__ == '__main__':

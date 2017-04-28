@@ -14,13 +14,13 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm_ex", "model_name")
-flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("sample_dir", "samples", "sample_name")
+flags.DEFINE_string("model_name", "panels", "model_name")
+flags.DEFINE_string("data_dir", "data/panels", "data dir path")
+flags.DEFINE_string("sample_dir", "samples_smooth", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
-flags.DEFINE_integer("batch_size", 144, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 400, "The size of batch images [64]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
-flags.DEFINE_string("sample_type", "type1", "sample type name.")
+flags.DEFINE_string("sample_type", "type2", "sample type name.")
 
 class DCGAN_S():
     def __init__(self, model_name, checkpoint_dir):
@@ -34,12 +34,12 @@ class DCGAN_S():
         self.G = self.generator.inference(z)
 
         # descriminator inference using true images
-        self.discriminator = model.DescriminatorExpand(FLAGS.batch_size, FLAGS.dc_dim)
+        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
         #self.D1, D1_logits = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G
         self.samples = self.generator.sampler(z, reuse=True)
-        self.D2, D2_logits, D2_inter = self.discriminator.inference(self.G, reuse=False)
+        self.D2, D2_logits = self.discriminator.inference(self.G, reuse=False)
 
 #        d1_sum = tf.summary.histogram("d1", self.D1)
         d2_sum = tf.summary.histogram("d2", self.D2)
@@ -93,6 +93,7 @@ def sampling():
     for j in xrange(100):
         for i in xrange(FLAGS.batch_size):
            batch_z[i, j] = 1.0 - i*2.0/400.
+           batch_z[i, j+10] = -1.0 + i * 2.0 / 400.
 
         generated_image_eval = sess.run(generate_images, {z: batch_z})
         out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)

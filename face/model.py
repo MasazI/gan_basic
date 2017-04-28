@@ -10,6 +10,7 @@ class Generator:
     def __init__(self, batch_size, first_conv_dim):
         self.batch_size = batch_size
         self.first_conv_dim = first_conv_dim
+        self.fc_dim = 8192
 
         self.g_bn0 = mp.BatchNorm(name='g_bn0')
         self.g_bn1 = mp.BatchNorm(name='g_bn1')
@@ -23,8 +24,10 @@ class Generator:
             print("===G")
             # linear projection.
             z_, h0_w, self.h0_b = mp.linear_project('g_lin_project_h0', z, self.first_conv_dim * 8 * 4 * 4, reuse=reuse, with_w=True)
+
+            g_fc1, w1, b1 = mp.fc_relu('g_fc1', z_, [z_.get_shape()[1], self.fc_dim], [self.fc_dim], reuse=reuse, trainable=trainable)
             # reshape for cnn inputs.
-            h0 = tf.reshape(z_, [-1, 4, 4, self.first_conv_dim * 8])
+            h0 = tf.reshape(g_fc1, [-1, 4, 4, self.first_conv_dim * 8])
             # batch norm
             h0 = tf.nn.relu(self.g_bn0(h0, trainable=trainable))
             # h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
@@ -73,8 +76,11 @@ class Generator:
             print("===G")
             # linear projection.
             z_, h0_w, self.h0_b = mp.linear_project('g_lin_project_h0', z, self.first_conv_dim * 8 * 4 * 4, reuse=reuse, with_w=True)
+
+            g_fc1, w1, b1 = mp.fc_relu('g_fc1', z_, [z_.get_shape()[1], self.fc_dim], [self.fc_dim], reuse=reuse,
+                                       trainable=trainable)
             # reshape for cnn inputs.
-            h0 = tf.reshape(z_, [-1, 4, 4, self.first_conv_dim * 8])
+            h0 = tf.reshape(g_fc1, [-1, 4, 4, self.first_conv_dim * 8])
             # batch norm
             h0 = tf.nn.relu(self.g_bn0(h0, trainable=trainable))
             # h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
@@ -115,6 +121,201 @@ class Generator:
                                                                       [3], [1, 2, 2, 1],
                                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             return tf.nn.tanh(deconv_h4)
+
+
+class Encoder:
+    # Encoder from DescriminatorExpand
+    def __init__(self, batch_size, first_conv_dim, z_dim):
+        self.batch_size = batch_size
+        self.first_conv_dim = first_conv_dim
+        self.z_dim = z_dim
+        self.fc_dim = 8192
+
+        self.d_bn1 = mp.BatchNorm(name='d_bn1')
+        self.d_bn2 = mp.BatchNorm(name='d_bn2')
+        self.d_bn3 = mp.BatchNorm(name='d_bn3')
+
+    def inference(self, x, reuse=False, trainable=True):
+        with tf.variable_scope("discriminator") as scope:
+            if reuse:
+                scope.reuse_variables()
+
+            print("===D")
+            print(x.get_shape())
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h0, conv_h0_w, conv_h0_b = mp.conv2d('d_conv_h0', x,
+                                                      [5, 5, x.get_shape()[-1], self.first_conv_dim],
+                                                      [self.first_conv_dim],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h0 = mp.lrelu(conv_h0)
+            print(h0.get_shape())
+            conv_h0_2, conv_h0_2_w, conv_h0_2_b = mp.conv2d('d_conv_h0_2', h0,
+                                                      [5, 5, h0.get_shape()[-1], self.first_conv_dim],
+                                                      [self.first_conv_dim],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h0_2 = mp.lrelu(conv_h0_2)
+            print(h0_2.get_shape())
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', h0_2,
+                                                      [5, 5, h0_2.get_shape()[-1], self.first_conv_dim*2],
+                                                      [self.first_conv_dim*2],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h1 = mp.lrelu(conv_h1)
+            h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
+            # h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
+
+            conv_h1_2, conv_h1_2_w, conv_h1_2_b = mp.conv2d('d_conv_h1_2', h1,
+                                                      [5, 5, h1.get_shape()[-1], self.first_conv_dim * 2],
+                                                      [self.first_conv_dim * 2],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h1_2 = mp.lrelu(conv_h1_2)
+            print(h1_2.get_shape())
+            # 3rd
+            conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', h1_2,
+                                                      [5, 5, h1_2.get_shape()[-1], self.first_conv_dim*4],
+                                                      [self.first_conv_dim*4],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h2 = mp.lrelu(conv_h2)
+            h2 = mp.lrelu(self.d_bn2(conv_h2, trainable=trainable))
+            # h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
+            print(h2.get_shape())
+
+            conv_h2_2, conv_h2_2_w, conv_h2_2_b = mp.conv2d('d_conv_h2_2', h2,
+                                                      [5, 5, h2.get_shape()[-1], self.first_conv_dim * 4],
+                                                      [self.first_conv_dim * 4],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            # h2 = mp.lrelu(conv_h2)
+            h2_2 = mp.lrelu(conv_h2_2)
+            print(h2_2.get_shape())
+
+            # 4th
+            conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', h2_2,
+                                                      [5, 5, h2_2.get_shape()[-1], self.first_conv_dim*8],
+                                                      [self.first_conv_dim*8],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h3 = mp.lrelu(conv_h3)
+            h3 = mp.lrelu(self.d_bn3(conv_h3, trainable=trainable))
+            # h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse, trainable=trainable))
+            print("h3")
+            print(h3.get_shape())
+
+            conv_h3_2, conv_h3_2_w, conv_h3_2_b = mp.conv2d('d_conv_h3_2', h3,
+                                                      [5, 5, h3.get_shape()[-1], self.first_conv_dim * 8],
+                                                      [self.first_conv_dim * 8],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+
+            h3_2 = mp.lrelu(conv_h3_2)
+            print(h3_2.get_shape())
+            e_fc1, w1, b1 = mp.fc_flat_relu('d_fc1', h3_2, [h3_2.get_shape().as_list()[1] * h3_2.get_shape().as_list()[2] * h3_2.get_shape().as_list()[3], self.fc_dim], [self.fc_dim],
+                                            reuse=reuse, trainable=trainable)
+            # linear projection (skip h3)
+            h4 = mp.linear_project('e_lin_project_h4', tf.reshape(e_fc1, [self.batch_size, -1]), self.z_dim, reuse=reuse)
+            return tf.nn.tanh(h4), h4, h3_2
+
+
+class DescriminatorExpand:
+    def __init__(self, batch_size, first_conv_dim):
+        self.batch_size = batch_size
+        self.first_conv_dim = first_conv_dim
+        self.fc_dim = 8192
+
+        self.d_bn1 = mp.BatchNorm(name='d_bn1')
+        self.d_bn2 = mp.BatchNorm(name='d_bn2')
+        self.d_bn3 = mp.BatchNorm(name='d_bn3')
+
+    def inference(self, x, reuse=False, trainable=True):
+        with tf.variable_scope("discriminator") as scope:
+            if reuse:
+                scope.reuse_variables()
+
+            print("===D")
+            print(x.get_shape())
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h0, conv_h0_w, conv_h0_b = mp.conv2d('d_conv_h0', x,
+                                                      [5, 5, x.get_shape()[-1], self.first_conv_dim],
+                                                      [self.first_conv_dim],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h0 = mp.lrelu(conv_h0)
+            print(h0.get_shape())
+            conv_h0_2, conv_h0_2_w, conv_h0_2_b = mp.conv2d('d_conv_h0_2', h0,
+                                                      [5, 5, h0.get_shape()[-1], self.first_conv_dim],
+                                                      [self.first_conv_dim],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h0_2 = mp.lrelu(conv_h0_2)
+            print(h0_2.get_shape())
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', h0_2,
+                                                      [5, 5, h0_2.get_shape()[-1], self.first_conv_dim*2],
+                                                      [self.first_conv_dim*2],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h1 = mp.lrelu(conv_h1)
+            h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
+            # h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
+
+            conv_h1_2, conv_h1_2_w, conv_h1_2_b = mp.conv2d('d_conv_h1_2', h1,
+                                                      [5, 5, h1.get_shape()[-1], self.first_conv_dim * 2],
+                                                      [self.first_conv_dim * 2],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h1_2 = mp.lrelu(conv_h1_2)
+            print(h1_2.get_shape())
+            # 3rd
+            conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', h1_2,
+                                                      [5, 5, h1_2.get_shape()[-1], self.first_conv_dim*4],
+                                                      [self.first_conv_dim*4],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h2 = mp.lrelu(conv_h2)
+            h2 = mp.lrelu(self.d_bn2(conv_h2, trainable=trainable))
+            # h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
+            print(h2.get_shape())
+
+            conv_h2_2, conv_h2_2_w, conv_h2_2_b = mp.conv2d('d_conv_h2_2', h2,
+                                                      [5, 5, h2.get_shape()[-1], self.first_conv_dim * 4],
+                                                      [self.first_conv_dim * 4],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            # h2 = mp.lrelu(conv_h2)
+            h2_2 = mp.lrelu(conv_h2_2)
+            print(h2_2.get_shape())
+
+            # 4th
+            conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', h2_2,
+                                                      [5, 5, h2_2.get_shape()[-1], self.first_conv_dim*8],
+                                                      [self.first_conv_dim*8],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            #h3 = mp.lrelu(conv_h3)
+            h3 = mp.lrelu(self.d_bn3(conv_h3, trainable=trainable))
+            # h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse, trainable=trainable))
+            print("h3")
+            print(h3.get_shape())
+
+            conv_h3_2, conv_h3_2_w, conv_h3_2_b = mp.conv2d('d_conv_h3_2', h3,
+                                                      [5, 5, h3.get_shape()[-1], self.first_conv_dim * 8],
+                                                      [self.first_conv_dim * 8],
+                                                      [1, 1, 1, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+
+            h3_2 = mp.lrelu(conv_h3_2)
+            print(h3_2.get_shape())
+            e_fc1, w1, b1 = mp.fc_flat_relu('d_fc1', h3_2, [h3_2.get_shape().as_list()[1] * h3_2.get_shape().as_list()[2] * h3_2.get_shape().as_list()[3], self.fc_dim], [self.fc_dim],
+                                            reuse=reuse, trainable=trainable)
+
+            # linear projection (skip h3)
+            h4 = mp.linear_project('d_lin_project_h4', tf.reshape(e_fc1, [self.batch_size, -1]), 1, reuse=reuse)
+            return tf.nn.sigmoid(h4), h4, h3_2
 
 
 class Descriminator:
@@ -175,7 +376,7 @@ class Descriminator:
 
             # linear projection (skip h3)
             h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=reuse)
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.sigmoid(h4), h4, h3
 
 
 class Reverser:
@@ -203,6 +404,7 @@ class Reverser:
                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             h0 = mp.lrelu(conv_h0)
             print(h0.get_shape())
+
             # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
             conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('r_conv_h1', h0,
                                                       [5, 5, h0.get_shape()[-1], self.first_conv_dim*2],
@@ -237,7 +439,7 @@ class Reverser:
 
             # linear projection (skip h3)
             h4 = mp.linear_project('r_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), self.z_dim, reuse=reuse)
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.tanh(h4), h4, h3
 
 
 if __name__ == '__main__':
