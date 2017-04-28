@@ -35,7 +35,7 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm", "model_name")
+flags.DEFINE_string("model_name", "face_h_fm_ex", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -58,7 +58,7 @@ class DCGAN():
         self.G = self.generator.inference(z)
 
         # descriminator inference using true images
-        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
+        self.discriminator = model.DescriminatorExpand(FLAGS.batch_size, FLAGS.dc_dim)
         self.D1, D1_logits, D1_inter = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G

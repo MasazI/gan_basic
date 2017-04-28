@@ -134,7 +134,7 @@ def reverse(image_path, verbose=False):
             pass
             # TODO save features object
         elif FLAGS.mode == 'distribution':
-            pass    
+            pass
 
 
         elif FLAGS.mode == 'visualize':
