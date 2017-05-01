@@ -17,7 +17,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
-flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
+flags.DEFINE_float("learning_rate", 5e-4, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
@@ -35,7 +35,7 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm2_ex2_fc", "model_name")
+flags.DEFINE_string("model_name", "face_h_fm2_fc", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -43,7 +43,7 @@ flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 
 flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
 flags.DEFINE_bool("is_crop", True, "crop training images?")
-flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
+flags.DEFINE_float('fm_rate', 0.05, 'feature matching rate.')
 
 
 class DCGAN():
@@ -54,11 +54,11 @@ class DCGAN():
     def step(self, images, z):
         z_sum = tf.summary.histogram("z", z)
 
-        self.generator = model.GeneratorExpand(FLAGS.batch_size, FLAGS.gc_dim)
+        self.generator = model.GeneratorFC(FLAGS.batch_size, FLAGS.gc_dim)
         self.G = self.generator.inference(z)
 
         # descriminator inference using true images
-        self.discriminator = model.DescriminatorExpand(FLAGS.batch_size, FLAGS.dc_dim)
+        self.discriminator = model.DescriminatorFC(FLAGS.batch_size, FLAGS.dc_dim)
         self.D1, D1_logits, D1_inter = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G
