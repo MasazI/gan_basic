@@ -215,10 +215,10 @@ class Encoder:
             h3_2 = mp.lrelu(conv_h3_2)
             print(h3_2.get_shape())
             e_fc1, w1, b1 = mp.fc_flat_relu('d_fc1', h3_2, [h3_2.get_shape().as_list()[1] * h3_2.get_shape().as_list()[2] * h3_2.get_shape().as_list()[3], self.fc_dim], [self.fc_dim],
-                                            reuse=reuse, trainable=trainable)
+                                            reuse=reuse, trainable=True)
             # linear projection (skip h3)
             h4 = mp.linear_project('e_lin_project_h4', tf.reshape(e_fc1, [self.batch_size, -1]), self.z_dim, reuse=reuse)
-            return tf.nn.tanh(h4), h4, h3_2
+            return tf.nn.tanh(h4), h4, e_fc1
 
 
 class DescriminatorExpand:
@@ -315,7 +315,7 @@ class DescriminatorExpand:
 
             # linear projection (skip h3)
             h4 = mp.linear_project('d_lin_project_h4', tf.reshape(e_fc1, [self.batch_size, -1]), 1, reuse=reuse)
-            return tf.nn.sigmoid(h4), h4, h3_2
+            return tf.nn.sigmoid(h4), h4, e_fc1
 
 
 class Descriminator:

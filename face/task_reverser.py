@@ -35,9 +35,9 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm_ex", "model_name")
+flags.DEFINE_string("model_name", "face_h_fm_ex_fc", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("reverser_model_name", "rface_h_fm_ex", "model_name")
+flags.DEFINE_string("reverser_model_name", "rface_h_fm_ex_fc2", "model_name")
 
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -126,7 +126,8 @@ def train():
     # trainable variables
     t_vars = tf.trainable_variables()
     #g_vars = [var for var in t_vars if 'g_' in var.name]
-    r_vars = [var for var in t_vars if 'e_' in var.name]
+    # train only encoder
+    r_vars = [var for var in t_vars if ('e_' in var.name) or ('d_fc1' in var.name)]
     # train operations
     r_optim = R_train_op(r_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
     # r_optim = R_train_op(r_loss + fm_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
@@ -135,6 +136,9 @@ def train():
     dg_vars = [var for var in all_vars if ('d_' in var.name) or ('g_' in var.name)]
     # saver
     saver = tf.train.Saver(dg_vars)
+
+    # saver of all variables
+    saver_all = tf.train.Saver()
 
     # initialization
     init_op = tf.global_variables_initializer()
@@ -148,6 +152,7 @@ def train():
     sess.run(init_op)
 
     # load parameters
+    print("G and D Model.")
     model_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
     ckpt = tf.train.get_checkpoint_state(model_dir)
     if ckpt and ckpt.model_checkpoint_path:
@@ -156,7 +161,7 @@ def train():
     else:
         print("No checkpoint file found")
         exit()
-    print("Model restored.")
+    print("G and D Model restored.")
 
     # summary
     r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
@@ -196,7 +201,7 @@ def train():
             if not gfile.Exists(out_dir):
                 gfile.MakeDirs(out_dir)
             out_path = os.path.join(out_dir, 'model.ckpt')
-            saver.save(sess, out_path, global_step=epoch)
+            saver_all.save(sess, out_path, global_step=epoch)
     coord.request_stop()
     coord.join(threads)
     sess.close()
