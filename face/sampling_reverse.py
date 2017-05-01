@@ -30,12 +30,12 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "rface_h_fm2", "model_name")
+flags.DEFINE_string("model_name", "rface_h_fm_ex_fc", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("reverser_model_name", "rface", "model_name")
 
 # flags.DEFINE_string("model_name", "rface", "model_name")
-flags.DEFINE_string("g_model_name", "face_h_fm", "model_name")
+flags.DEFINE_string("g_model_name", "face_h_fm_ex_fc", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
@@ -55,7 +55,7 @@ class DCGAN_SR():
 
     def step(self, samples):
         # reverser
-        self.reverser = model.Reverser(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
+        self.reverser = model.Encoder(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
         self.R1, R1_logits, R1_inter = self.reverser.inference(samples)
 
         return R1_logits
@@ -118,6 +118,7 @@ def reverse(image_path, verbose=False):
             # img_array = np.reshape(img_array, (FLAGS.image_height_org, FLAGS.image_width_org))
             height_diff = FLAGS.image_height_org - FLAGS.image_height
             width_diff = FLAGS.image_width_org - FLAGS.image_width
+            # crop
             img_array = img_array[int(height_diff/2):int(height_diff/2)+FLAGS.image_height, int(width_diff/2):int(width_diff/2)+FLAGS.image_width, :]
             # input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
             img_array = img_array / 127.5 - 1.0
@@ -184,9 +185,17 @@ def reverse(image_path, verbose=False):
 
     else:
         pil_img = Image.open(image_path)
-        pil_img = pil_img.resize((64, 64))
+        pil_img = pil_img.resize((FLAGS.image_height_org, FLAGS.image_width_org))
         img_array = np.asarray(pil_img)
         #input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
+        # img_array = np.reshape(img_array, (FLAGS.image_height_org, FLAGS.image_width_org))
+        height_diff = FLAGS.image_height_org - FLAGS.image_height
+        width_diff = FLAGS.image_width_org - FLAGS.image_width
+        # crop
+        img_array = img_array[int(height_diff / 2):int(height_diff / 2) + FLAGS.image_height,
+                    int(width_diff / 2):int(width_diff / 2) + FLAGS.image_width, :]
+        org_array = img_array
+
         img_array = img_array/127.5 - 1.0
         img_array = img_array[None, ...]
         vectors_eval = sess.run(vectors, {samples: img_array})
@@ -194,7 +203,7 @@ def reverse(image_path, verbose=False):
         input_vector = vectors_eval[0][None, ...]
         print(input_vector)
 
-        sampling_from_vec.sampling(input_vector)
+        sampling_from_vec.sampling(input_vector, org_image=org_array)
 
         # regenerate_sample = sess.run(regenerate, {z: input_vector})
         # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)

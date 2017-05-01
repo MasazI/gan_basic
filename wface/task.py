@@ -72,12 +72,12 @@ class DCGAN():
         return images, D1_logits, D2_logits, D1_inter, D2_inter, G_sum, z_sum, d1_sum, d2_sum
 
     def cost(self, D1_logits, D2_logits, D1_inter, D2_inter):
-        # real image loss (1) for descriminator
-        d_loss_real = tf.reduce_mean(self.D1)
-        # fake image loss (1) for descriminator
-        d_loss_fake = tf.reduce_mean(self.D2)
-        # fake image loss (1) for generator
-        g_loss = tf.reduce_mean(self.D2)
+        # real image loss for descriminator
+        d_loss_real = tf.reduce_mean(D1_logits)
+        # fake image loss for descriminator
+        d_loss_fake = tf.reduce_mean(D2_logits)
+        # fake image loss for generator
+        g_loss = tf.negative(tf.reduce_mean(D2_logits))
 
         # fake images loss (1) for generator with feature matching
         d1_inter = tf.reduce_mean(D1_inter, reduction_indices=(0))
