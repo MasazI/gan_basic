@@ -34,15 +34,15 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "wface_h_fm", "model_name")
-flags.DEFINE_string("data_dir", "data/face", "data dir path")
+flags.DEFINE_string("model_name", "/media/newton/data/models/gan/wface_h_fm_fix2", "model_name")
+flags.DEFINE_string("data_dir", "/home/newton/source/gan_basic/face/data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 flags.DEFINE_float('c_param', 0.01, 'discriminator clip parameters.')
 
 flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
-flags.DEFINE_bool("is_crop", False, "crop training images?")
+flags.DEFINE_bool("is_crop", True, "crop training images?")
 flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
 
 
@@ -77,7 +77,7 @@ class DCGAN():
         # fake image loss for descriminator
         d_loss_fake = tf.reduce_mean(D2_logits)
         # fake image loss for generator
-        g_loss = tf.negative(tf.reduce_mean(D2_logits))
+        g_loss = -tf.reduce_mean(D2_logits)
 
         # fake images loss (1) for generator with feature matching
         d1_inter = tf.reduce_mean(D1_inter, reduction_indices=(0))
@@ -131,7 +131,7 @@ def train():
     d_vars = [var for var in t_vars if 'd_' in var.name]
     g_vars = [var for var in t_vars if 'g_' in var.name]
     # train operations
-    d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
+    d_optim = D_train_op(-d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
     g_optim = G_train_op(g_loss + fm_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
 
     # clip d parameters
