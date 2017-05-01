@@ -35,8 +35,8 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face", "model_name")
-flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+flags.DEFINE_string("model_name", "face_h_fm_ex", "model_name")
+flags.DEFINE_string("reverser_model_name", "rface_h_fm_ex", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -61,8 +61,8 @@ class DCGAN():
         self.samples = self.generator.sampler(z, reuse=False, trainable=False)
 
         # reverser
-        self.reverser = model.Reverser(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits = self.reverser.inference(self.samples)
+        self.reverser = model.Encoder(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
+        self.R1, R1_logits = self.reverser.inference(self.samples, trainable=False)
         R_sum = tf.summary.histogram("R", self.R1)
 
         # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
@@ -120,6 +120,17 @@ def train():
 
     # run
     sess.run(init_op)
+
+    # load parameters
+    model_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
+    ckpt = tf.train.get_checkpoint_state(model_dir)
+    if ckpt and ckpt.model_checkpoint_path:
+        print("Model: %s" % (ckpt.model_checkpoint_path))
+        saver.restore(sess, ckpt.model_checkpoint_path)
+    else:
+        print("No checkpoint file found")
+        exit()
+    print("Model restored.")
 
     # summary
     r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
