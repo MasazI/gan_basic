@@ -34,7 +34,7 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "wface_h_fm_gp", "model_name")
+flags.DEFINE_string("model_name", "wface_h_gp", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -200,7 +200,8 @@ def train():
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
     images_inf, generates, logits1, logits2, inter1, inter2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss = dcgan.cost(images, generates, logits1, logits2, inter1, inter2)
+    images_generates = tf.multiply(tf.add(generates, 1.0), 127.5)
+    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss = dcgan.cost(images, images_generates, logits1, logits2, inter1, inter2)
 
     # trainable variables
     t_vars = tf.trainable_variables()
@@ -208,7 +209,8 @@ def train():
     g_vars = [var for var in t_vars if 'g_' in var.name]
     # train operations
     d_optim = D_train_op(d_loss, d_vars, FLAGS.learning_rate, FLAGS.beta1)
-    g_optim = G_train_op(g_loss + fm_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
+    g_optim = G_train_op(g_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
+    # g_optim = G_train_op(g_loss + fm_loss, g_vars, FLAGS.learning_rate, FLAGS.beta1)
 
     # clip d parameters
     clip_updates = [tf.assign(var, tf.clip_by_value(var, -FLAGS.c_param, FLAGS.c_param)) for var in d_vars]
