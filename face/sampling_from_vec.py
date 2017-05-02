@@ -17,7 +17,7 @@ flags.DEFINE_integer("z_dim_v", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim_v", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim_v", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name_v", "face_h_fm_ex_fc", "model_name")
+flags.DEFINE_string("model_name_v", "face_h_fm_again", "model_name")
 flags.DEFINE_string("data_dir_v", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir_v", "samples_from_reverse_z", "sample_name")
 flags.DEFINE_string("checkpoint_dir_v", "checkpoint", "Directory name to save the checkpoints [checkpoint]")

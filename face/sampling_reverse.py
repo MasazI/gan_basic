@@ -30,12 +30,12 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "rface_h_fm_ex_fc", "model_name")
+flags.DEFINE_string("model_name", "rface_h_fm_again", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+#flags.DEFINE_string("reverser_model_name", "rface_h_fm_again", "model_name")
 
 # flags.DEFINE_string("model_name", "rface", "model_name")
-flags.DEFINE_string("g_model_name", "face_h_fm_ex_fc", "model_name")
+flags.DEFINE_string("g_model_name", "face_h_fm_again", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
