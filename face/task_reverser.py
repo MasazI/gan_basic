@@ -79,6 +79,7 @@ class DCGAN():
     def cost(self, R1_logits, R1_inter, z_noise):
         # loss
         r_loss = tf.reduce_mean(tf.square(R1_logits - z_noise))
+        #r_loss = tf.reduce_mean(tf.square(self.R1 - z_noise))
 
         # r1 inter(sampling through reverser) and d2 inter(sampling through discriminator)
         # r1_inter = tf.reduce_mean(R1_inter, reduction_indices=(0))
@@ -134,8 +135,11 @@ def train():
 
     all_vars = tf.global_variables()
     dg_vars = [var for var in all_vars if ('d_' in var.name) or ('g_' in var.name)]
-    # saver
+    # saver of d and g
     saver = tf.train.Saver(dg_vars)
+
+    # saver of e_
+    saver_e = tf.train.Saver(r_vars)
 
     # saver of all variables
     saver_all = tf.train.Saver()
@@ -159,9 +163,20 @@ def train():
         print("Model: %s" % (ckpt.model_checkpoint_path))
         saver.restore(sess, ckpt.model_checkpoint_path)
     else:
-        print("No checkpoint file found")
+        print("G and D Model: No checkpoint file found")
         exit()
-    print("G and D Model restored.")
+    print("G and D Model: restored.")
+
+    # load e parameters
+    print("E Model.")
+    model_e_dir = os.path.join(FLAGS.reverser_model_name, FLAGS.checkpoint_dir)
+    ckpt_e = tf.train.get_checkpoint_state(model_e_dir)
+    if ckpt_e and ckpt_e.model_checkpoint_path:
+        print("Model: %s" % (ckpt_e.model_checkpoint_path))
+        saver_e.restore(sess, ckpt_e.model_checkpoint_path)
+        print("E Model: restored.")
+    else:
+        print("E model: No checkpoint file found")
 
     # summary
     r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
