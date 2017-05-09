@@ -200,8 +200,8 @@ def train():
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
     images_inf, generates, logits1, logits2, inter1, inter2, G_sum, z_sum, d1_sum, d2_sum = dcgan.step(images, z)
-    images_generates = tf.multiply(tf.add(generates, 1.0), 127.5)
-    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss = dcgan.cost(images, images_generates, logits1, logits2, inter1, inter2)
+    #images_generates = tf.multiply(tf.add(generates, 1.0), 127.5)
+    d_loss_real, d_loss_fake, d_loss_real_sum, d_loss_fake_sum, d_loss_sum, g_loss_sum, d_loss, g_loss, fm_loss = dcgan.cost(images, generates, logits1, logits2, inter1, inter2)
 
     # trainable variables
     t_vars = tf.trainable_variables()

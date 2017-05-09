@@ -35,15 +35,15 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm_ex", "model_name")
-flags.DEFINE_string("reverser_model_name", "rface_h_fm_ex", "model_name")
+flags.DEFINE_string("model_name", "wface_h_gp", "model_name")
+flags.DEFINE_string("reverser_model_name", "rwface_h_gp", "model_name")
 flags.DEFINE_string("data_dir", "data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 
-flags.DEFINE_integer("data_type", 2, "1: hollywood, 2: lfw")
-flags.DEFINE_bool("is_crop", False, "crop training images?")
+flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
+flags.DEFINE_bool("is_crop", True, "crop training images?")
 
 class DCGAN():
     def __init__(self, model_name, checkpoint_dir):
@@ -62,7 +62,7 @@ class DCGAN():
 
         # reverser
         self.reverser = model.Encoder(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits = self.reverser.inference(self.samples, trainable=False)
+        self.R1, R1_logits, R1_inter = self.reverser.inference(self.samples, trainable=False)
         R_sum = tf.summary.histogram("R", self.R1)
 
         # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
@@ -89,10 +89,13 @@ class DCGAN():
 
 
 def train():
-    # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
-    datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
-                        FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads)
-    # images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
+    if FLAGS.data_type == 1 or FLAGS.data_type == 2:
+        # datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4
+        datas = dataset.Dataset(FLAGS.data_dir, FLAGS.image_height_org, FLAGS.image_width_org,
+                            FLAGS.image_depth_org, FLAGS.batch_size, FLAGS.num_threads, type=FLAGS.data_type, crop=FLAGS.is_crop)
+    else:
+        print("invalid data type.")
+        return
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
@@ -103,12 +106,20 @@ def train():
     # trainable variables
     t_vars = tf.trainable_variables()
     #g_vars = [var for var in t_vars if 'g_' in var.name]
-    r_vars = [var for var in t_vars if 'r_' in var.name]
+    r_vars = [var for var in t_vars if ('e_' in var.name) or ('d_fc1' in var.name)]
     # train operations
     r_optim = R_train_op(r_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
+    #
+    all_vars = tf.global_variables()
+    dg_vars = [var for var in all_vars if ('d_' in var.name) or ('g_' in var.name)]
+    # saver of d and g
+    saver = tf.train.Saver(dg_vars)
 
-    # saver
-    saver = tf.train.Saver()
+    # saver of e_
+    saver_e = tf.train.Saver(r_vars)
+
+    # saver of all variables
+    saver_all = tf.train.Saver()
 
     # initialization
     init_op = tf.global_variables_initializer()
@@ -122,15 +133,27 @@ def train():
     sess.run(init_op)
 
     # load parameters
+    print("G and D Model.")
     model_dir = os.path.join(FLAGS.model_name, FLAGS.checkpoint_dir)
     ckpt = tf.train.get_checkpoint_state(model_dir)
     if ckpt and ckpt.model_checkpoint_path:
         print("Model: %s" % (ckpt.model_checkpoint_path))
         saver.restore(sess, ckpt.model_checkpoint_path)
     else:
-        print("No checkpoint file found")
+        print("G and D Model: No checkpoint file found")
         exit()
-    print("Model restored.")
+    print("G and D Model: restored.")
+
+    # load e parameters
+    print("E Model.")
+    model_e_dir = os.path.join(FLAGS.reverser_model_name, FLAGS.checkpoint_dir)
+    ckpt_e = tf.train.get_checkpoint_state(model_e_dir)
+    if ckpt_e and ckpt_e.model_checkpoint_path:
+        print("Model: %s" % (ckpt_e.model_checkpoint_path))
+        saver_e.restore(sess, ckpt_e.model_checkpoint_path)
+        print("E Model: restored.")
+    else:
+        print("E model: No checkpoint file found")
 
     # summary
     r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
