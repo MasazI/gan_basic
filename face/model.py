@@ -503,12 +503,12 @@ class Descriminator:
         self.batch_size = batch_size
         self.first_conv_dim = first_conv_dim
 
-        self.d_bn1 = mp.BatchNorm(name='d_bn1')
-        self.d_bn2 = mp.BatchNorm(name='d_bn2')
-        self.d_bn3 = mp.BatchNorm(name='d_bn3')
+        # self.d_bn1 = mp.BatchNorm(name='d_bn1')
+        # self.d_bn2 = mp.BatchNorm(name='d_bn2')
+        # self.d_bn3 = mp.BatchNorm(name='d_bn3')
 
-    def inference(self, x, reuse=False, trainable=True):
-        with tf.variable_scope("discriminator") as scope:
+    def inference(self, x, reuse=False, trainable=True, num=0):
+        with tf.variable_scope("discriminator_%d" % num) as scope:
             if reuse:
                 scope.reuse_variables()
 
@@ -529,8 +529,8 @@ class Descriminator:
                                                       [1, 2, 2, 1],
                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             #h1 = mp.lrelu(conv_h1)
-            h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
-            # h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
+            #h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
+            h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
 
             # 3rd
             conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', h1,
@@ -539,8 +539,8 @@ class Descriminator:
                                                       [1, 2, 2, 1],
                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             #h2 = mp.lrelu(conv_h2)
-            h2 = mp.lrelu(self.d_bn2(conv_h2, trainable=trainable))
-            # h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
+            #h2 = mp.lrelu(self.d_bn2(conv_h2, trainable=trainable))
+            h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
             print(h2.get_shape())
             # 4th
             conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', h2,
@@ -549,8 +549,8 @@ class Descriminator:
                                                       [1, 2, 2, 1],
                                                       padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
             #h3 = mp.lrelu(conv_h3)
-            h3 = mp.lrelu(self.d_bn3(conv_h3, trainable=trainable))
-            # h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse, trainable=trainable))
+            # h3 = mp.lrelu(self.d_bn3(conv_h3, trainable=trainable))
+            h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse, trainable=trainable))
             print("h3")
             print(h3.get_shape())
 

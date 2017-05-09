@@ -45,6 +45,82 @@ flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
 flags.DEFINE_bool("is_crop", True, "crop training images?")
 flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
 
+flags.DEFINE_integer('d_num', 0.1, 'The number of descriminator for DCGMAN.')
+
+class DCGMAN():
+    def __init__(self, model_name, checkpoint_dir):
+        self.model_name = model_name
+        self.checkpoint_dir = checkpoint_dir
+        self.d_num = FLAGS.d_num
+
+    def step(self, images, z):
+        self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
+        self.G = self.generator.inference(z)
+
+        # descriminator inference using true images
+        self.discriminator_list = []
+        self.D1_list = []
+        self.D2_list = []
+        D1_logits_list = []
+        D2_logits_list = []
+        D1_inter_list = []
+        D2_inter_list = []
+        self.samples = self.generator.sampler(z, reuse=True)
+        for i in range(self.d_num):
+            discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
+            D1, D1_logits, D1_inter = discriminator.inference(images, num=i)
+            # descriminator inference using sampling with G
+            D2, D2_logits, D2_inter = discriminator.inference(self.G, reuse=True, num=i)
+            self.D1_list.append(D1)
+            self.D2_list.append(D2)
+            D1_logits_list.append(D1_logits)
+            D2_logits_list.append(D2_logits)
+            D1_inter_list.append(D1_inter)
+            D2_inter_list.append(D2_inter)
+        return images, D1_logits_list, D2_logits_list, D1_inter_list, D2_inter_list
+
+    def cost(self, D1_logits_list, D2_logits_list, D1_inter_list, D2_inter_list):
+        d_losses = []
+        g_losses = []
+        fm_losses = []
+        for i in range(self.d_num):
+            # real image loss (1) for descriminator
+            d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_logits_list[i], labels=tf.ones_like(self.D1_list[i])))
+            # fake image loss (0) for descriminator
+            d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits_list[i], labels=tf.zeros_like(self.D2_list[i])))
+            # fake image loss (1) for generator
+            g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_logits_list[i], labels=tf.ones_like(self.D2_list[i])))
+            # fake images loss (1) for generator with feature matching
+            d1_inter = tf.reduce_mean(D1_inter_list, reduction_indices=(0))
+            d2_inter = tf.reduce_mean(D2_inter_list, reduction_indices=(0))
+            print("feature matching:")
+            print(tf.nn.l2_loss(d1_inter - d2_inter).shape)
+            fm_loss = tf.multiply(tf.nn.l2_loss(d1_inter - d2_inter), FLAGS.fm_rate)
+
+            d_loss = d_loss_real + d_loss_fake
+            d_losses.append(d_loss)
+            g_losses.append(g_loss)
+            fm_losses.append(fm_loss)
+
+        # summary
+        # d_loss_real_sum = tf.summary.scalar("d_loss_real", d_loss_real)
+        # d_loss_fake_sum = tf.summary.scalar("d_loss_fake", d_loss_fake)
+        #
+
+        # g_loss_sum = tf.summary.scalar("g_loss", g_loss)
+        # d_loss_sum = tf.summary.scalar("d_loss", d_loss)
+        return d_losses, g_losses, fm_losses
+
+    def generate_images(self, z, row=8, col=8):
+        images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
+        print(images.get_shape())
+        images = [image for image in tf.split(images, FLAGS.batch_size, axis=0)]
+        rows = []
+        for i in range(row):
+            rows.append(tf.concat(images[col * i + 0:col * i + col], axis=2))
+        image = tf.concat(rows, axis=1)
+        return tf.image.encode_png(tf.squeeze(image, [0]))
+
 
 class DCGAN():
     def __init__(self, model_name, checkpoint_dir):
@@ -54,11 +130,11 @@ class DCGAN():
     def step(self, images, z):
         z_sum = tf.summary.histogram("z", z)
 
-        self.generator = model.GeneratorExpand(FLAGS.batch_size, FLAGS.gc_dim)
+        self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
         self.G = self.generator.inference(z)
 
         # descriminator inference using true images
-        self.discriminator = model.DescriminatorExpand(FLAGS.batch_size, FLAGS.dc_dim)
+        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
         self.D1, D1_logits, D1_inter = self.discriminator.inference(images)
 
         # descriminator inference using sampling with G
