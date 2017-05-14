@@ -129,8 +129,8 @@ class EncoderNoBN:
 
     def inference(self, x, reuse=False, trainable=True):
         with tf.variable_scope("discriminator") as scope:
-            if reuse:
-                scope.reuse_variables()
+            # if reuse:
+            #     scope.reuse_variables()
 
             print("===D")
             print(x.get_shape())
@@ -192,8 +192,8 @@ class DescriminatorNoBN:
 
     def inference(self, x, reuse=False, trainable=True):
         with tf.variable_scope("discriminator") as scope:
-            if reuse:
-                scope.reuse_variables()
+            # if reuse:
+            #     scope.reuse_variables()
 
             print("===D")
             print(x.get_shape())
@@ -238,7 +238,7 @@ class DescriminatorNoBN:
             print(h3.get_shape())
 
             # linear projection (skip h3)
-            h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=reuse)
+            h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=False)
 
             # wgan used h4 (not sigmoid)
             return tf.nn.sigmoid(h4), h4, h3

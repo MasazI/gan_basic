@@ -36,7 +36,7 @@ flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv laye
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
 flags.DEFINE_string("model_name", "/media/newton/data/models/gan/wface_h_fm2_gp", "model_name")
-flags.DEFINE_string("reverser_model_name", "/media/newton/data/models/gan/rwface_h_fm2_gp", "model_name")
+flags.DEFINE_string("reverser_model_name", "/media/newton/data/models/gan/anowface_h_fm2", "model_name")
 flags.DEFINE_string("data_dir", "/home/newton/source/gan_basic/face/data/face", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
@@ -44,42 +44,70 @@ flags.DEFINE_float('gpu_memory_fraction', 0.3, 'gpu memory fraction.')
 
 flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
 flags.DEFINE_bool("is_crop", True, "crop training images?")
+flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
 
 class ANOGAN():
     def __init__(self, model_name, checkpoint_dir):
         self.model_name = model_name
         self.checkpoint_dir = checkpoint_dir
 
-    def step(self, images, z):
+    def step(self, images):
         # real -> Encoder -> Generator -> samples
-        self.reverser = model.Encoder(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
+        self.reverser = model.EncoderNoBN(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
         self.R1, R1_logits, R1_inter = self.reverser.inference(images)
-        R_sum = tf.summary.histogram("R", self.R1)
+        #R_sum = tf.summary.histogram("R", self.R1)
         self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
-        self.samples = self.generator.sampler(R1_logits, reuse=False, trainable=False)
+        self.generates = self.generator.sampler(R1_logits, reuse=False, trainable=False)
 
         # z -> Generator -> Discriminator -> z'
         #self.G = self.generator.sampler(z, reuse=True, trainable=False)
         #self.R2, R2_logits, R2_inter = self.reverser.inference(self.G, reuse=True)
 
         # # descriminator inference using true images
-        self.discriminator = model.Descriminator(FLAGS.batch_size, FLAGS.dc_dim)
-        self.D2, D2_logits, D2_inter = self.discriminator.inference(self.samples, reuse=True, trainable=False)
+        self.discriminator = model.DescriminatorNoBN(FLAGS.batch_size, FLAGS.dc_dim)
+        self.D2, D2_logits, D2_inter = self.discriminator.inference(self.generates, reuse=True, trainable=False)
 
         # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
         # return D2_logits, G_sum, z_sum, d1_sum, d2_sum
-        return self.samples, R1_inter, D2_logits, D2_inter
+        return self.generates, R1_inter, D2_logits, D2_inter
 
-    def cost(self, R1_logits, z_noise):
-        # loss
-        r_loss = tf.reduce_mean(tf.square(R1_logits - z_noise))
+    def cost(self, images, generates, R1_inter, D2_logits, D2_inter):
+        # d loss
+        d_loss_fake = tf.reduce_mean(D2_logits)
+
+        # residual loss
+        r_loss = tf.reduce_sum(tf.abs(images - generates))
+        r_loss = tf.multiply(r_loss, (1 - FLAGS.fm_rate))
+
+        # gp for anogan
+        # alpha = tf.random_uniform(
+        #     shape=[FLAGS.batch_size, 1],
+        #     minval=0.,
+        #     maxval=1.
+        # )
+        # differences = images - generates  # disc_cost
+        # interpolates = images + (alpha * differences)
+        # self.D3, D3_logits, D3_inter = self.discriminator.inference(interpolates, reuse=True)
+        # gradients = tf.gradients(D3_logits, [interpolates])[0]
+        # slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
+        # gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2)
+        # r_loss += FLAGS.grad_penalty_rambda * gradient_penalty
+
+        # fake images loss (1) for generator with feature matching
+        d1_inter = tf.reduce_mean(R1_inter, reduction_indices=(0))
+        d2_inter = tf.reduce_mean(D2_inter, reduction_indices=(0))
+        print("feature matching:")
+        print(tf.nn.l2_loss(d1_inter - d2_inter).shape)
+        fm_loss = tf.multiply(tf.nn.l2_loss(d1_inter - d2_inter), FLAGS.fm_rate)
 
         # summary
+        d_loss_fake_sum = tf.summary.scalar("d_loss_fake", d_loss_fake)
         r_loss_sum = tf.summary.scalar("r_loss", r_loss)
-        return r_loss, r_loss_sum
+        fm_loss_sum = tf.summary.scalar("fm_loss", fm_loss)
+        return d_loss_fake, r_loss, fm_loss, d_loss_fake_sum, r_loss_sum, fm_loss_sum
 
     def generate_images(self, z, row=8, col=8):
-        images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
+        images = tf.cast(tf.multiply(tf.add(self.generates, 1.0), 127.5), tf.uint8)
         print(images.get_shape())
         images = [image for image in tf.split(images, FLAGS.batch_size, axis=0)]
         rows = []
@@ -99,19 +127,23 @@ def train():
         print("invalid data type.")
         return
 
-    z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
+    images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
-    dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    R1_logits, R_sum, z_sum = dcgan.step(z)
-    r_loss, r_loss_sum = dcgan.cost(R1_logits, z)
+    #z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
+
+    dcgan = ANOGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
+    generates, R1_inter, D2_logits, D2_inter = dcgan.step(images)
+    d_loss_fake, r_loss, fm_loss, d_loss_fake_sum, r_loss_sum, fm_loss_sum = dcgan.cost(images, generates, R1_inter, D2_logits, D2_inter)
+    #r_loss, r_loss_sum = dcgan.cost(, generates, R1_inter, D2_logits, D2_inter)
 
     # trainable variables
     t_vars = tf.trainable_variables()
     # g_vars = [var for var in t_vars if 'g_' in var.name]
     r_vars = [var for var in t_vars if ('e_' in var.name) or ('d_fc1' in var.name)]
     # train operations
-    r_optim = R_train_op(r_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
-    #
+    r_optim = R_train_op(r_loss + fm_loss, r_vars, FLAGS.learning_rate, FLAGS.beta1)
+
+    # for saver variables
     all_vars = tf.global_variables()
     dg_vars = [var for var in all_vars if ('d_' in var.name) or ('g_' in var.name)]
     # saver of d and g
@@ -158,7 +190,7 @@ def train():
         print("E model: No checkpoint file found")
 
     # summary
-    r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum])
+    r_sum = tf.summary.merge([r_loss_sum, fm_loss_sum])
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -171,10 +203,10 @@ def train():
             batch_z = np.random.uniform(-1, 1, [FLAGS.batch_size, FLAGS.z_dim]).astype(np.float32)
 
             # R optimization
-            _, summary_str = sess.run([r_optim, r_sum], {z: batch_z})
+            _, summary_str = sess.run([r_optim, r_sum])
             writer.add_summary(summary_str, counter)
 
-            errR = sess.run(r_loss, {z: batch_z})
+            errR = sess.run(r_loss)
             print("epochs: %02d %04d/%04d time: %4.4f, r_loss: %.8f" % (
                 epoch, idx, FLAGS.steps, time.time() - start_time, errR))
 
