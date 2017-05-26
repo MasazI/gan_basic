@@ -17,6 +17,15 @@ class Dataset:
             self.train_csv = "train.csv"
             with open(self.train_csv, "w") as f:
                 for image in self.data:
+                    try:
+                        img = Image.open(image)
+                        width = img.size[0]
+                        height = img.size[1]
+                        if height/width > 1:
+                            continue
+                    except Exception as ex:
+                        print("broken image %s" % ex)
+                        continue
                     f.write(image)
                     f.write("\n")
             print("dataset number: %d" % (len(self.data)))
