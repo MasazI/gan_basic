@@ -15,10 +15,10 @@ from tensorflow.python.platform import gfile
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("epochs", 100, "Epoch to train [25]")
+flags.DEFINE_integer("epochs", 11, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
-flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
-flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
+flags.DEFINE_float("learning_rate", 0.0001, "Learning rate of for adam [0.0002]")
+flags.DEFINE_float("beta1", 0.9, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 16, "The size of batch images [64]")
 flags.DEFINE_integer("sample_size", 16, "The size of sample images [64]")
@@ -35,13 +35,14 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "panels_fm", "model_name")
-flags.DEFINE_string("data_dir", "data/DJI_0002/panel", "data dir path")
+flags.DEFINE_string("model_name", "/media/newton/data/models/panels", "model_name")
+flags.DEFINE_string("data_dir", "/media/newton/data/images/panels/panel/DJI_0014", "data dir path")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
+flags.DEFINE_string("logs_dir", "logs", "logs dir name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 
-flags.DEFINE_integer("data_type", 2, "1: hollywood, 2: lfw")
+flags.DEFINE_integer("data_type", 1, "1: hollywood, 2: lfw")
 flags.DEFINE_bool("is_crop", False, "crop training images?")
 flags.DEFINE_float('fm_rate', 0.1, 'feature matching rate.')
 
@@ -147,7 +148,10 @@ def train():
     sess = tf.Session(config=tf.ConfigProto(
         allow_soft_placement=True,
         gpu_options=gpu_options))
-    writer = tf.summary.FileWriter("./logs", sess.graph_def)
+    log_dir = os.path.join(FLAGS.model_name, FLAGS.logs_dir)
+    if gfile.Exists(log_dir):
+        gfile.DeleteRecursively(log_dir)
+    writer = tf.summary.FileWriter(log_dir, sess.graph_def)
 
     # run
     sess.run(init_op)
@@ -214,7 +218,7 @@ def train():
 
 
 def main(_):
-    print("face DCGANs.")
+    print("panel DCGANs.")
     train()
 
 

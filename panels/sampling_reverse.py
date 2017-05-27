@@ -11,7 +11,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import model
-import features
 from dataset import load_csv
 import sampling_from_vec
 import tensorflow as tf
@@ -31,12 +30,12 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "face_lfw", "model_name")
-flags.DEFINE_string("data_dir", "data/face_lfw", "data dir path")
-flags.DEFINE_string("reverser_model_name", "rface", "model_name")
+flags.DEFINE_string("model_name", "/media/newton/data/models/rpanels_l3", "model_name")
+flags.DEFINE_string("data_dir", "/media/newton/data/images/panels/panel/DJI_0014", "data dir path")
+#flags.DEFINE_string("reverser_model_name", "/mnt/images/models/gans/rpanels_fm", "model_name")
 
 # flags.DEFINE_string("model_name", "rface", "model_name")
-flags.DEFINE_string("g_model_name", "face", "model_name")
+flags.DEFINE_string("g_model_name", "/media/newton/data/models/panels", "model_name")
 flags.DEFINE_string("sample_dir", "samples", "sample_name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 
@@ -56,9 +55,8 @@ class DCGAN_SR():
 
     def step(self, samples):
         # reverser
-        self.reverser = model.Reverser(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits = self.reverser.inference(samples)
-
+        self.reverser = model.Encoder(FLAGS.sample_num, FLAGS.dc_dim, FLAGS.z_dim)
+        self.R1, R1_logits, R1_inter = self.reverser.inference(samples)
         return R1_logits
 
 
@@ -128,8 +126,8 @@ def reverse(image_path, verbose=False):
             vectors_evals.append(vectors_eval[0])
 
         if FLAGS.mode == 'sampling':
-            features_obj = features.Features(images, vectors_evals)
-
+            #features_obj = features.Features(images, vectors_evals)
+            pass
             # TODO save features object
         else:
             # visualization
@@ -181,6 +179,7 @@ def reverse(image_path, verbose=False):
         pil_img = Image.open(image_path)
         pil_img = pil_img.resize((64, 64))
         img_array = np.asarray(pil_img)
+        org_array = img_array
         #input for reverser image = tf.subtract(tf.div(image, 127.5), 1.0)
         img_array = img_array/127.5 - 1.0
         img_array = img_array[None, ...]
@@ -189,7 +188,7 @@ def reverse(image_path, verbose=False):
         input_vector = vectors_eval[0][None, ...]
         print(input_vector)
 
-        sampling_from_vec.sampling(input_vector)
+        sampling_from_vec.sampling(input_vector, org_image=org_array)
 
         # regenerate_sample = sess.run(regenerate, {z: input_vector})
         # out_dir = os.path.join(FLAGS.model_name, FLAGS.sample_dir)

@@ -7,7 +7,7 @@ import random
 from glob import glob
 import csv
 import tensorflow as tf
-from PIL import Image
+import cv2
 
 class Dataset:
     def __init__(self, datadir, org_height, org_width, org_depth=3, batch_size=32, threads_num=4, type=1, crop=False):
@@ -16,7 +16,18 @@ class Dataset:
             self.data = glob(os.path.join(datadir, "*.jpg"))
             self.train_csv = "train.csv"
             with open(self.train_csv, "w") as f:
-                for image in self.data:
+                allnum = len(self.data)
+                for i, image in enumerate(self.data):
+                    try:
+                        print("num: %d %d" % (i, allnum))
+                        # img = cv2.imread(image)
+                        # height, width, channels = img.shape
+                        # if height/width > 1:
+                        #     print("wrong image %s" % image)
+                        #     continue
+                    except Exception as ex:
+                        print("broken image %s" % ex)
+                        continue
                     f.write(image)
                     f.write("\n")
             print("dataset number: %d" % (len(self.data)))
@@ -35,7 +46,7 @@ class Dataset:
             with open(self.train_csv, "w") as f:
                 for image in self.data:
                     try:
-                        img = Image.open(image)
+                        img = cv2.imread(image)
                     except Exception as ex:
                         print("broken image %s" % ex)
                         continue
