@@ -30,7 +30,7 @@ flags.DEFINE_integer("image_height_org", 108, "original image height")
 flags.DEFINE_integer("image_width_org", 108, "original image width")
 flags.DEFINE_integer("c_dim", 3, "The size of input image channel to use (will be center cropped) [3]")
 
-flags.DEFINE_string("model_name", "/media/newton/data/models/rpanels_l3", "model_name")
+flags.DEFINE_string("model_name", "/media/newton/data/models/rpanels_image2", "model_name")
 flags.DEFINE_string("data_dir", "/media/newton/data/images/panels/panel/DJI_0014", "data dir path")
 #flags.DEFINE_string("reverser_model_name", "/mnt/images/models/gans/rpanels_fm", "model_name")
 

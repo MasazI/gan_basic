@@ -53,7 +53,9 @@ class DCGAN_S():
 #         return D2_logits, G_sum, z_sum, d2_sum
 
     def generate_images(self, z, row=8, col=8, png=False):
-        images = tf.cast(tf.multiply(tf.add(self.G, 1.0), 127.5), tf.uint8)
+        images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
+
+        #images = tf.cast(tf.multiply(tf.add(self.G, 1.0), 127.5), tf.uint8)
         print(images.get_shape())
         images = [image for image in tf.split(images, FLAGS.batch_size_v, axis=0)]
         rows = []
@@ -92,6 +94,7 @@ def sampling(z_eval, org_image=None):
         model_dir = os.path.join(FLAGS.model_name_v, FLAGS.checkpoint_dir_v)
         ckpt = tf.train.get_checkpoint_state(model_dir)
         if ckpt and ckpt.model_checkpoint_path:
+            print("Model: %s" % ckpt.model_checkpoint_path)
             saver.restore(sess, ckpt.model_checkpoint_path)
         else:
             print("No checkpoint file found")

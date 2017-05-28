@@ -19,7 +19,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_integer("epochs", 101, "Epoch to train [25]")
 flags.DEFINE_integer("steps", 100, "Epoch to train [100]")
-flags.DEFINE_float("learning_rate", 0.00001, "Learning rate of for adam [0.0002]")
+flags.DEFINE_float("learning_rate", 0.0001, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.9, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
 flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
@@ -56,36 +56,38 @@ class DCGAN():
         self.model_name = model_name
         self.checkpoint_dir = checkpoint_dir
 
-    def step(self, z):
-        z_sum = tf.summary.histogram("z", z)
+    def step(self, images):
+        I_sum = tf.summary.image("images", images)
+
+        # reverser
+        self.reverser = model.Encoder(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
+        self.R1, R1_logits, R1_inter = self.reverser.inference(images)
 
         # generater
         self.generator = model.Generator(FLAGS.batch_size, FLAGS.gc_dim)
         # self.G = self.generator.inference(z)
 
         # sampler using generator
-        self.samples = self.generator.sampler(z, reuse=False, trainable=False)
+        self.samples = self.generator.sampler(self.R1, reuse=False, trainable=False)
+        G_sum = tf.summary.image("generate", self.samples)
 
-        # reverser
-        self.reverser = model.Encoder(FLAGS.batch_size, FLAGS.dc_dim, FLAGS.z_dim)
-        self.R1, R1_logits, R1_inter = self.reverser.inference(self.samples)
         R_sum = tf.summary.histogram("R", self.R1)
-                # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
+        # return images, D1_logits, D2_logits, G_sum, z_sum, d1_sum, d2_sum
         # return D2_logits, G_sum, z_sum, d1_sum, d2_sum
-        return R1_logits, R1_inter, R_sum, z_sum
+        return self.samples, R1_inter, R_sum, G_sum, I_sum
 
-    def cost(self, R1_logits, z_noise):
+    def cost(self, samples, images):
         # loss
-        r_loss1 = tf.reduce_mean(tf.square(R1_logits - z_noise))
-        print("*"*100)
-        normed_R1_losgits = tf.nn.l2_normalize(R1_logits, dim=1)
-        normed_z_noise = tf.nn.l2_normalize(z_noise, dim=1)
-        r_loss2 = tf.reduce_mean(tf.losses.cosine_distance(normed_R1_losgits, normed_z_noise, dim=1))
-        r_loss2 = tf.clip_by_value(r_loss2, -FLAGS.clip_coss_loss, FLAGS.clip_coss_loss)
-        print(r_loss2.shape)
-        r1_abs = tf.matmul(R1_logits, R1_logits, transpose_b=True)
-        z_abs = tf.matmul(z_noise, z_noise, transpose_b=True)
-        r_loss3 = tf.reduce_mean(tf.abs(tf.subtract(r1_abs, z_abs)))
+        r_loss1 = tf.reduce_mean(tf.losses.mean_squared_error(samples, images))
+        # print("*"*100)
+        # normed_R1_losgits = tf.nn.l2_normalize(R1_logits, dim=1)
+        # normed_z_noise = tf.nn.l2_normalize(z_noise, dim=1)
+        # r_loss2 = tf.reduce_mean(tf.losses.cosine_distance(normed_R1_losgits, normed_z_noise, dim=1))
+        # r_loss2 = tf.clip_by_value(r_loss2, -FLAGS.clip_coss_loss, FLAGS.clip_coss_loss)
+        # print(r_loss2.shape)
+        # r1_abs = tf.matmul(R1_logits, R1_logits, transpose_b=True)
+        # z_abs = tf.matmul(z_noise, z_noise, transpose_b=True)
+        # r_loss3 = tf.reduce_mean(tf.abs(tf.subtract(r1_abs, z_abs)))
 
         #         normed_embedding = tf.nn.l2_normalize(R1_logits, dim=1)
 #         normed_array = tf.nn.l2_normalize(z_noise, dim=1)
@@ -96,17 +98,17 @@ class DCGAN():
 
         # r1, r2 summary
         r_loss1_sum = tf.summary.scalar("r_loss1", r_loss1)
-        r_loss2_sum = tf.summary.scalar("r_loss2", r_loss2)
-        r_loss3_sum = tf.summary.scalar("r_loss3", r_loss3)
+        # r_loss2_sum = tf.summary.scalar("r_loss2", r_loss2)
+        # r_loss3_sum = tf.summary.scalar("r_loss3", r_loss3)
 
         # rloss
         # r_loss = tf.multiply(r_loss1, FLAGS.l2distace) + r_loss2
         # r_loss = r_loss1 + r_loss2 + r_loss3
-        r_loss = r_loss1 + r_loss2
+        r_loss = r_loss1
         # r summary
         r_loss_sum = tf.summary.scalar("r_loss", r_loss)
 
-        return r_loss, r_loss_sum, r_loss1_sum, r_loss2_sum, r_loss3_sum
+        return r_loss, r_loss_sum, r_loss1_sum
 
     def generate_images(self, z, row=8, col=8):
         images = tf.cast(tf.multiply(tf.add(self.samples, 1.0), 127.5), tf.uint8)
@@ -130,13 +132,13 @@ def train():
     else:
         print("invalid data type.")
         return
-    # images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
+    images = datas.get_inputs(FLAGS.image_height, FLAGS.image_width)
 
     z = tf.placeholder(tf.float32, [None, FLAGS.z_dim], name='z')
 
     dcgan = DCGAN(FLAGS.model_name, FLAGS.checkpoint_dir)
-    R1_logits, R1_inter, R_sum, z_sum = dcgan.step(z)
-    r_loss, r_loss_sum, r_loss1_sum, r_loss2_sum, r_loss3_sum = dcgan.cost(R1_logits, z)
+    samples, R1_inter, R_sum, G_sum, I_sum = dcgan.step(images)
+    r_loss, r_loss_sum, r_loss1_sum = dcgan.cost(samples, images)
 
     # trainable variables
     t_vars = tf.trainable_variables()
@@ -194,7 +196,7 @@ def train():
         print("E model: No checkpoint file found")
 
     # summary
-    r_sum = tf.summary.merge([z_sum, R_sum, r_loss_sum, r_loss1_sum, r_loss2_sum, r_loss3_sum])
+    r_sum = tf.summary.merge([R_sum, G_sum, I_sum, r_loss_sum, r_loss1_sum])
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
