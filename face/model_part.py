@@ -56,7 +56,7 @@ def residual_block(scope_name, inputs, output_channel, first_block=False, wd=0.0
         raise ValueError('Output and input channel does not match in residual blocks!!!')
 
     # The first conv layer of the first residual block does not need to be normalized and relu-ed.
-    with tf.variable_scope('conv1_in_block'):
+    with tf.variable_scope('conv1_in_block_%s' % (scope_name)):
         if first_block:
             conv2d(
                 scope_name,
@@ -67,13 +67,14 @@ def residual_block(scope_name, inputs, output_channel, first_block=False, wd=0.0
                 padding='SAME')
         else:
             conv1 = bn_relu_conv2d(
-                scope_name, inputs,
+                scope_name,
+                inputs,
                 shape=[3, 3, input_channel, output_channel],
                 bias_shape=[output_channel],
                 stride=[1, 1, 1, 1],
                 padding='SAME')
 
-    with tf.variable_scope('conv2_in_block'):
+    with tf.variable_scope('conv2_in_block_%s' % (scope_name)):
         conv2 = bn_relu_conv2d(scope_name, conv1, shape=[3, 3, input_channel, output_channel], bias_shape=[output_channel], stride=[1, 1, 1, 1], padding='SAME')
 
     # When the channels of input layer and conv2 does not match, we add zero pads to increase the
