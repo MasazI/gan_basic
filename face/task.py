@@ -35,9 +35,10 @@ flags.DEFINE_integer("z_dim", 100, "dimension of dim for Z for sampling")
 flags.DEFINE_integer("gc_dim", 64, "dimension of generative filters in conv layer")
 flags.DEFINE_integer("dc_dim", 64, "dimension of discriminative filters in conv layer")
 
-flags.DEFINE_string("model_name", "face_h_fm2_ex2_fc", "model_name")
-flags.DEFINE_string("data_dir", "data/face", "data dir path")
-flags.DEFINE_string("sample_dir", "samples", "sample_name")
+flags.DEFINE_string("model_name", "/mnt/images/models/gans/resnet/model", "model_name")
+flags.DEFINE_string("data_dir", "/mnt/images/face/face", "data dir path")
+flags.DEFINE_string("sample_dir", "/mnt/images/models/gans/resnet/samples", "sample_name")
+flags.DEFINE_string("logs_dir", "logs", "logs dir name")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_float('gpu_memory_fraction', 0.5, 'gpu memory fraction.')
 
@@ -222,7 +223,8 @@ def train():
     sess = tf.Session(config=tf.ConfigProto(
         allow_soft_placement=True,
         gpu_options=gpu_options))
-    writer = tf.summary.FileWriter("./logs", sess.graph_def)
+    log_dir = os.path.join(FLAGS.model_name, FLAGS.logs_dir)
+    writer = tf.summary.FileWriter(log_dir, sess.graph_def)
 
     # run
     sess.run(init_op)
