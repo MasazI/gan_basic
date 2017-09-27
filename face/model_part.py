@@ -22,6 +22,37 @@ def _variable_on_gpu(name, shape, initializer, trainable=True):
     return var
 
 
+def _phase_shift(inputs, r):
+    bsize, a, b, c = inputs.get_shape().as_list()
+    bsize = tf.shape(inputs)[0] # Handling Dimension(None) type for undefined batch dim
+    X = tf.reshape(inputs, (bsize, a, b, r, r))
+    X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
+    X = tf.split(1, a, X)  # a, [bsize, b, r, r]
+    X = tf.concat(2, [tf.squeeze(x, axis=1) for x in X])  # bsize, b, a*r, r
+    X = tf.split(1, b, X)  # b, [bsize, a*r, r]
+    X = tf.concat(2, [tf.squeeze(x, axis=1) for x in X])  # bsize, a*r, b*r
+    return tf.reshape(X, (bsize, a*r, b*r, 1))
+
+
+def subpixel_conv(X, r, color=True):
+    '''
+    subpixel convolution layer
+    Args:
+        X: inputs data
+        r: magnification ratio
+        color: <rgb:True, gray:False>
+
+    Returns: magnificated images
+
+    '''
+    if color:
+        Xc = tf.split(3, 3, X)
+        X = tf.concat(3, [_phase_shift(x, r) for x in Xc])
+    else:
+        X = _phase_shift(X, r)
+    return X
+
+
 def linear_project(scope_name, inputs, output_size, stddev=0.02, bias_start=0.0, reuse=False, with_w=False):
     shape = inputs.get_shape().as_list()
     with tf.variable_scope(scope_name or "Linear") as scope:
@@ -58,7 +89,7 @@ def residual_block(scope_name, inputs, output_channel, first_block=False, wd=0.0
     # The first conv layer of the first residual block does not need to be normalized and relu-ed.
     with tf.variable_scope('conv1_in_block_%s' % (scope_name)):
         if first_block:
-            conv2d(
+            conv1 = conv2d(
                 scope_name,
                 inputs,
                 shape=[3, 3, input_channel, output_channel],
