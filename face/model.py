@@ -630,6 +630,89 @@ class DescriminatorExpand:
             return tf.nn.sigmoid(h4), h4, e_fc1
 
 
+class DescriminatorResnet:
+    def __init__(self, batch_size, first_conv_dim):
+        self.batch_size = batch_size
+        self.first_conv_dim = first_conv_dim
+
+        # self.d_bn1 = mp.BatchNorm(name='d_bn1')
+        # self.d_bn2 = mp.BatchNorm(name='d_bn2')
+        # self.d_bn3 = mp.BatchNorm(name='d_bn3')
+
+    def inference(self, x, reuse=False, trainable=True, num=0):
+        with tf.variable_scope("discriminator_%d" % num) as scope:
+            if reuse:
+                scope.reuse_variables()
+
+            print("===D")
+            print(x.get_shape())
+
+            # TODO residual blocks
+
+            # 1st conv
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h0, conv_h0_w, conv_h0_b = mp.conv2d('d_conv_h0', x,
+                                                      [5, 5, x.get_shape()[-1], self.first_conv_dim],
+                                                      [self.first_conv_dim],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h0 = mp.lrelu(conv_h0)
+            print(h0.get_shape())
+
+            # 1st resblock
+            # residual_block_wout_bn(scope_name, inputs, output_channel, first_block=False, wd=0.0, trainable=True):
+            res_h0 = mp.residual_block_wout_bn('d_res_h0', conv_h0, self.first_conv_dim, trainable=trainable)
+            res_h1 = mp.residual_block_wout_bn('d_res_h1', res_h0, self.first_conv_dim, trainable=trainable)
+            res_h2 = mp.residual_block_wout_bn('d_res_h2', res_h1, self.first_conv_dim, trainable=trainable)
+
+            # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', res_h2,
+                                                      [5, 5, h0.get_shape()[-1], self.first_conv_dim*2],
+                                                      [self.first_conv_dim*2],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h1 = mp.lrelu(conv_h1)
+            #h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
+            #h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
+
+            # 2nd resblock
+            res_h3 = mp.residual_block_wout_bn('d_res_h3', h1, self.first_conv_dim*2, trainable=trainable)
+            res_h4 = mp.residual_block_wout_bn('d_res_h4', res_h3, self.first_conv_dim*2, trainable=trainable)
+            res_h5 = mp.residual_block_wout_bn('d_res_h5', res_h4, self.first_conv_dim*2, trainable=trainable)
+
+            # 3rd
+            conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', res_h5,
+                                                      [5, 5, h1.get_shape()[-1], self.first_conv_dim*4],
+                                                      [self.first_conv_dim*4],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h2 = mp.lrelu(conv_h2)
+            #h2 = mp.lrelu(self.d_bn2(conv_h2, trainable=trainable))
+            #h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
+            print(h2.get_shape())
+
+            # 3rd resblockl 
+            res_h6 = mp.residual_block_wout_bn('d_res_h6', h2, self.first_conv_dim * 4, trainable=trainable)
+            res_h7 = mp.residual_block_wout_bn('d_res_h7', res_h6, self.first_conv_dim * 4, trainable=trainable)
+            res_h8 = mp.residual_block_wout_bn('d_res_h8', res_h7, self.first_conv_dim * 4, trainable=trainable)
+
+            # 4th
+            conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', res_h8,
+                                                      [5, 5, h2.get_shape()[-1], self.first_conv_dim*8],
+                                                      [self.first_conv_dim*8],
+                                                      [1, 2, 2, 1],
+                                                      padding='SAME', reuse=reuse, with_w=True, trainable=trainable)
+            h3 = mp.lrelu(conv_h3)
+            # h3 = mp.lrelu(self.d_bn3(conv_h3, trainable=trainable))
+            #h3 = mp.lrelu(mp.batch_norm(conv_h3, scope_name='d_bn_h3', reuse=reuse, trainable=trainable))
+            print("h3")
+            print(h3.get_shape())
+
+            # linear projection (skip h3)
+            h4 = mp.linear_project('d_lin_project_h4', tf.reshape(h3, [self.batch_size, -1]), 1, reuse=reuse)
+            return tf.nn.sigmoid(h4), h4, h3
+
+
 class Descriminator:
     def __init__(self, batch_size, first_conv_dim):
         self.batch_size = batch_size
