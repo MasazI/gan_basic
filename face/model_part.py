@@ -68,6 +68,62 @@ def linear_project(scope_name, inputs, output_size, stddev=0.02, bias_start=0.0,
         return tf.matmul(inputs, matrix) + bias
 
 
+def residual_block_wout_bn(scope_name, inputs, output_channel, first_block=False, wd=0.0, trainable=True):
+    '''
+    Defines a residual block in ResNet
+    :param inputs: 4D tensor with mini-batch
+    :param output_channel: int. return_tensor.get_shape().as_list()[-1] = output_channel
+    :param first_block: if this is the first residual block of the whole network
+    :return: 4D tensor.
+    '''
+    input_channel = inputs.get_shape().as_list()[-1]
+
+    # When it's time to "shrink" the image size, we use stride = 2
+    if input_channel * 2 == output_channel:
+        increase_dim = True
+        stride = 2
+    elif input_channel == output_channel:
+        increase_dim = False
+        stride = 1
+    else:
+        raise ValueError('Output and input channel does not match in residual blocks!!!')
+
+    # The first conv layer of the first residual block does not need to be normalized and relu-ed.
+    with tf.variable_scope('conv1_in_block_%s' % (scope_name)):
+        if first_block:
+            conv1 = conv2d(
+                scope_name,
+                inputs,
+                shape=[3, 3, input_channel, output_channel],
+                bias_shape=[output_channel],
+                stride=[1, 1, 1, 1],
+                padding='SAME')
+        else:
+            conv1 = lrelu_conv2d(
+                scope_name,
+                inputs,
+                shape=[3, 3, input_channel, output_channel],
+                bias_shape=[output_channel],
+                stride=[1, 1, 1, 1],
+                padding='SAME')
+
+    with tf.variable_scope('conv2_in_block_%s' % (scope_name)):
+        conv2 = lrelu_conv2d(scope_name, conv1, shape=[3, 3, input_channel, output_channel], bias_shape=[output_channel], stride=[1, 1, 1, 1], padding='SAME')
+
+    # When the channels of input layer and conv2 does not match, we add zero pads to increase the
+    #  depth of input layers
+    if increase_dim is True:
+        pooled_input = tf.nn.avg_pool(inputs, ksize=[1, 2, 2, 1],
+                                      strides=[1, 2, 2, 1], padding='VALID')
+        padded_input = tf.pad(pooled_input, [[0, 0], [0, 0], [0, 0], [input_channel // 2,
+                                                                     input_channel // 2]])
+    else:
+        padded_input = inputs
+
+    output = conv2 + padded_input
+    return output
+
+
 def residual_block(scope_name, inputs, output_channel, first_block=False, wd=0.0, trainable=True):
     '''
     Defines a residual block in ResNet
@@ -152,6 +208,30 @@ def conv2d(scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.
         return conv, kernel, biases
     else:
         return conv
+
+
+def lrelu_conv2d(scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False):
+    with tf.variable_scope(scope_name) as scope:
+        if reuse:
+            scope.reuse_variables()
+
+        # relu
+        relu = lrelu(inputs)
+
+        # conv2d
+        kernel = _variable_with_weight_decay(
+            'weights',
+            shape=shape,
+            stddev=0.01,
+            wd=wd,  # not use weight decay
+            trainable=trainable
+        )
+        conv = tf.nn.conv2d(relu, kernel, stride, padding=padding)
+        if with_w:
+            return conv, kernel
+        else:
+            return conv
+
 
 def bn_relu_conv2d(scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False):
     with tf.variable_scope(scope_name) as scope:
