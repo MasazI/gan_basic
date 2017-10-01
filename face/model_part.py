@@ -238,7 +238,7 @@ def bn_relu_conv2d(scope_name, inputs, shape, bias_shape, stride, padding='VALID
         if reuse:
             scope.reuse_variables()
         # bn layer
-        bn = batch_norm(inputs)
+        bn = batch_norm(inputs, "%s_bn" % scope_name)
 
         # relu
         relu = tf.nn.relu(bn)
