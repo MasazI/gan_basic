@@ -209,14 +209,28 @@ class GeneratorResnet:
             h0 = tf.reshape(g_fc1, [-1, 4, 4, self.first_conv_dim * 9])
             # batch norm
             h0 = tf.nn.relu(self.g_bn0(h0, trainable=trainable))
-            # h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
+            #h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
 
-            # TODO step 1 change residual blocks layer x 8
+            res_h0 = mp.residual_block('g_res_h0', h0, self.first_conv_dim * 9, trainable=trainable)
+            res_h1 = mp.residual_block('g_res_h1', res_h0, self.first_conv_dim * 9, trainable=trainable)
+            res_h2 = mp.residual_block('g_res_h2', res_h1, self.first_conv_dim * 9, trainable=trainable)
 
-            # TODO step 2 change subpixel convolution layer x 4
+            # 2nd resblock
+            res_h3 = mp.residual_block('g_res_h3', res_h2, self.first_conv_dim * 9, trainable=trainable)
+            res_h4 = mp.residual_block('g_res_h4', res_h3, self.first_conv_dim * 9, trainable=trainable)
+            res_h5 = mp.residual_block('g_res_h5', res_h4, self.first_conv_dim * 9, trainable=trainable)
 
+            # 3rd resblock
+            res_h6 = mp.residual_block('g_res_h6', res_h5, self.first_conv_dim * 9, trainable=trainable)
+            res_h7 = mp.residual_block('g_res_h7', res_h6, self.first_conv_dim * 9, trainable=trainable)
+            res_h8 = mp.residual_block('g_res_h8', res_h7, self.first_conv_dim * 9, trainable=trainable)
+
+            # 4th resblock
+            res_h9 = mp.residual_block('g_res_h9', res_h8, self.first_conv_dim * 9, trainable=trainable)
+            res_h10 = mp.residual_block('g_res_h10', res_h9, self.first_conv_dim * 9, trainable=trainable)
+            res_h11 = mp.residual_block('g_res_h11', res_h10, self.first_conv_dim * 9, trainable=trainable)
             # 1st
-            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('g_conv_h1', h0,
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('g_conv_h1', res_h2,
                                                       [3, 3, h0.get_shape()[-1], self.first_conv_dim * 9 * 2 * 2],
                                                       [self.first_conv_dim * 9 * 2 * 2],
                                                       [1, 1, 1, 1],
@@ -224,6 +238,7 @@ class GeneratorResnet:
             deconv_h1 = mp.subpixel_conv(conv_h1, 2, output_c=self.first_conv_dim * 9)
             print(deconv_h1.get_shape())
             h1 = tf.nn.relu(self.g_bn1(deconv_h1, trainable=trainable))
+            #h1 = tf.nn.relu(mp.batch_norm(deconv_h1, scope_name='g_bn_h1', reuse=reuse, trainable=trainable))
 
             # 2nd
             conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('g_conv_h2', h1,
@@ -234,6 +249,8 @@ class GeneratorResnet:
                                                             trainable=trainable)
             deconv_h2 = mp.subpixel_conv(conv_h2, 2, output_c=self.first_conv_dim * 6)
             h2 = tf.nn.relu(self.g_bn2(deconv_h2, trainable=trainable))
+            #h2 = tf.nn.relu(mp.batch_norm(deconv_h2, scope_name='g_bn_h2', reuse=reuse, trainable=trainable))
+
 
             # 3rd
             conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('g_conv_h3', h2,
@@ -244,6 +261,7 @@ class GeneratorResnet:
                                                             trainable=trainable)
             deconv_h3 = mp.subpixel_conv(conv_h3, 2, output_c=self.first_conv_dim * 3)
             h3 = tf.nn.relu(self.g_bn3(deconv_h3, trainable=trainable))
+            #h3 = tf.nn.relu(mp.batch_norm(deconv_h3, scope_name='g_bn_h3', reuse=reuse, trainable=trainable))
 
             # 4th
             conv_h4, conv_h4_w, conv_4_b = mp.conv2d('g_conv_h4', h3,
@@ -253,7 +271,6 @@ class GeneratorResnet:
                                                   padding='SAME', reuse=reuse, with_w=True,
                                                   trainable=trainable)
             deconv_h4 = mp.subpixel_conv(conv_h4, 2, 3)
-            print(deconv_h4.get_shape())
             return tf.nn.tanh(deconv_h4)
 
 
@@ -271,10 +288,28 @@ class GeneratorResnet:
             h0 = tf.reshape(g_fc1, [-1, 4, 4, self.first_conv_dim * 9])
             # batch norm
             h0 = tf.nn.relu(self.g_bn0(h0, trainable=trainable))
-            # h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
+            #h0 = tf.nn.relu(mp.batch_norm(h0, scope_name='g_bn_h0', reuse=reuse, trainable=trainable))
 
+            res_h0 = mp.residual_block('g_res_h0', h0, self.first_conv_dim * 9, trainable=trainable)
+            res_h1 = mp.residual_block('g_res_h1', res_h0, self.first_conv_dim * 9, trainable=trainable)
+            res_h2 = mp.residual_block('g_res_h2', res_h1, self.first_conv_dim * 9, trainable=trainable)
+
+            # 2nd resblock
+            res_h3 = mp.residual_block('g_res_h3', res_h2, self.first_conv_dim * 9, trainable=trainable)
+            res_h4 = mp.residual_block('g_res_h4', res_h3, self.first_conv_dim * 9, trainable=trainable)
+            res_h5 = mp.residual_block('g_res_h5', res_h4, self.first_conv_dim * 9, trainable=trainable)
+
+            # 3rd resblock
+            res_h6 = mp.residual_block('g_res_h6', res_h5, self.first_conv_dim * 9, trainable=trainable)
+            res_h7 = mp.residual_block('g_res_h7', res_h6, self.first_conv_dim * 9, trainable=trainable)
+            res_h8 = mp.residual_block('g_res_h8', res_h7, self.first_conv_dim * 9, trainable=trainable)
+
+            # 4th resblock
+            res_h9 = mp.residual_block('g_res_h9', res_h8, self.first_conv_dim * 9, trainable=trainable)
+            res_h10 = mp.residual_block('g_res_h10', res_h9, self.first_conv_dim * 9, trainable=trainable)
+            res_h11 = mp.residual_block('g_res_h11', res_h10, self.first_conv_dim * 9, trainable=trainable)
             # 1st
-            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('g_conv_h1', h0,
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('g_conv_h1', res_h2,
                                                       [3, 3, h0.get_shape()[-1], self.first_conv_dim * 9 * 2 * 2],
                                                       [self.first_conv_dim * 9 * 2 * 2],
                                                       [1, 1, 1, 1],
@@ -282,6 +317,7 @@ class GeneratorResnet:
             deconv_h1 = mp.subpixel_conv(conv_h1, 2, output_c=self.first_conv_dim * 9)
             print(deconv_h1.get_shape())
             h1 = tf.nn.relu(self.g_bn1(deconv_h1, trainable=trainable))
+            #h1 = tf.nn.relu(mp.batch_norm(deconv_h1, scope_name='g_bn_h1', reuse=reuse, trainable=trainable))
 
             # 2nd
             conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('g_conv_h2', h1,
@@ -292,6 +328,8 @@ class GeneratorResnet:
                                                             trainable=trainable)
             deconv_h2 = mp.subpixel_conv(conv_h2, 2, output_c=self.first_conv_dim * 6)
             h2 = tf.nn.relu(self.g_bn2(deconv_h2, trainable=trainable))
+            #h2 = tf.nn.relu(mp.batch_norm(deconv_h2, scope_name='g_bn_h2', reuse=reuse, trainable=trainable))
+
 
             # 3rd
             conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('g_conv_h3', h2,
@@ -302,6 +340,7 @@ class GeneratorResnet:
                                                             trainable=trainable)
             deconv_h3 = mp.subpixel_conv(conv_h3, 2, output_c=self.first_conv_dim * 3)
             h3 = tf.nn.relu(self.g_bn3(deconv_h3, trainable=trainable))
+            #h3 = tf.nn.relu(mp.batch_norm(deconv_h3, scope_name='g_bn_h3', reuse=reuse, trainable=trainable))
 
             # 4th
             conv_h4, conv_h4_w, conv_4_b = mp.conv2d('g_conv_h4', h3,
@@ -663,10 +702,10 @@ class DescriminatorResnet:
             # residual_block_wout_bn(scope_name, inputs, output_channel, first_block=False, wd=0.0, trainable=True):
             res_h0 = mp.residual_block_wout_bn('d_res_h0', conv_h0, self.first_conv_dim, trainable=trainable)
             res_h1 = mp.residual_block_wout_bn('d_res_h1', res_h0, self.first_conv_dim, trainable=trainable)
-            res_h2 = mp.residual_block_wout_bn('d_res_h2', res_h1, self.first_conv_dim, trainable=trainable)
+
 
             # conv2d arguments = (scope_name, inputs, shape, bias_shape, stride, padding='VALID', wd=0.0, reuse=False, trainable=True, with_w=False)
-            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', res_h2,
+            conv_h1, conv_h1_w, conv_h1_b = mp.conv2d('d_conv_h1', res_h1,
                                                       [5, 5, h0.get_shape()[-1], self.first_conv_dim*2],
                                                       [self.first_conv_dim*2],
                                                       [1, 2, 2, 1],
@@ -675,13 +714,11 @@ class DescriminatorResnet:
             #h1 = mp.lrelu(self.d_bn1(conv_h1, trainable=trainable))
             #h1 = mp.lrelu(mp.batch_norm(conv_h1, scope_name='d_bn_h1', reuse=reuse, trainable=trainable))
 
-            # 2nd resblock
-            res_h3 = mp.residual_block_wout_bn('d_res_h3', h1, self.first_conv_dim*2, trainable=trainable)
-            res_h4 = mp.residual_block_wout_bn('d_res_h4', res_h3, self.first_conv_dim*2, trainable=trainable)
-            res_h5 = mp.residual_block_wout_bn('d_res_h5', res_h4, self.first_conv_dim*2, trainable=trainable)
+            res_h2 = mp.residual_block_wout_bn('d_res_h2', h1, self.first_conv_dim * 2, trainable=trainable)
+            res_h3 = mp.residual_block_wout_bn('d_res_h3', res_h2, self.first_conv_dim * 2, trainable=trainable)
 
             # 3rd
-            conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', res_h5,
+            conv_h2, conv_h2_w, conv_h2_b = mp.conv2d('d_conv_h2', res_h3,
                                                       [5, 5, h1.get_shape()[-1], self.first_conv_dim*4],
                                                       [self.first_conv_dim*4],
                                                       [1, 2, 2, 1],
@@ -691,13 +728,16 @@ class DescriminatorResnet:
             #h2 = mp.lrelu(mp.batch_norm(conv_h2, scope_name='d_bn_h2', reuse=reuse, trainable=trainable))
             print(h2.get_shape())
 
-            # 3rd resblockl 
-            res_h6 = mp.residual_block_wout_bn('d_res_h6', h2, self.first_conv_dim * 4, trainable=trainable)
-            res_h7 = mp.residual_block_wout_bn('d_res_h7', res_h6, self.first_conv_dim * 4, trainable=trainable)
-            res_h8 = mp.residual_block_wout_bn('d_res_h8', res_h7, self.first_conv_dim * 4, trainable=trainable)
+            res_h4 = mp.residual_block_wout_bn('d_res_h4', h2, self.first_conv_dim * 4, trainable=trainable)
+            res_h5 = mp.residual_block_wout_bn('d_res_h5', res_h4, self.first_conv_dim * 4, trainable=trainable)
+
+            # 3rd resblockl
+            # res_h6 = mp.residual_block_wout_bn('d_res_h6', h2, self.first_conv_dim * 4, trainable=trainable)
+            # res_h7 = mp.residual_block_wout_bn('d_res_h7', res_h6, self.first_conv_dim * 4, trainable=trainable)
+            # res_h8 = mp.residual_block_wout_bn('d_res_h8', res_h7, self.first_conv_dim * 4, trainable=trainable)
 
             # 4th
-            conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', res_h8,
+            conv_h3, conv_h3_w, conv_h3_b = mp.conv2d('d_conv_h3', res_h5,
                                                       [5, 5, h2.get_shape()[-1], self.first_conv_dim*8],
                                                       [self.first_conv_dim*8],
                                                       [1, 2, 2, 1],
